@@ -6,7 +6,7 @@ import logging
 import json
 import uuid
 import pika
-from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer
+from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer, TaskManager, ResponseObject
 
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
@@ -23,6 +23,11 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
     QUEUE = 'reply-to-queue'
     ROUTING_KEY = 'example.text'
 
+    def __init__(self, ampq_url: str, task_manager: TaskManager):
+        ExampleConsumer.__init__(self, amqp_url)
+        self._task_manager = TaskManager
+
+
     def on_message(self, channel, basic_deliver, properties, body):
         """Invoked by pika when a message is delivered from RabbitMQ. The
         channel is passed for your convenience. The basic_deliver object that
@@ -37,6 +42,8 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
         :param bytes body: The message body
 
         """
+
+        self._task_manager.update_task_status(ResponseObject.from_json(body))
 
         LOGGER.info('Received message # %s from %s: %s',
                     basic_deliver.delivery_tag, properties.app_id, body)
@@ -64,11 +71,12 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
 class SchedulerAsyncPublisher(ExamplePublisher):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, ampq_url: str, task_manager: TaskManager):
 
-        ExamplePublisher.__init__(self, *args, **kwargs)
+        ExamplePublisher.__init__(self, ampq_url)
 
         self._feedback_consumer = None
+        self._task_manager = task_manager
 
     REPLY_QUEUE = 'feedback_queue'
 
@@ -98,11 +106,13 @@ class SchedulerAsyncPublisher(ExamplePublisher):
         if self._channel is None or not self._channel.is_open:
             return
 
+        corr_id = self._task_manager.add_task()
+
         properties = pika.BasicProperties(
             app_id='example-publisher',
             content_type='application/json',
             reply_to=self.REPLY_QUEUE,
-            correlation_id=str(uuid.uuid4()).encode('ascii')
+            correlation_id=str(corr_id)
         )
 
         self._channel.basic_publish(self.EXCHANGE, self.ROUTING_KEY,

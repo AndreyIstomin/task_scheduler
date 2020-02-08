@@ -3,7 +3,7 @@ import pika
 import json
 from aiohttp import web
 from backend.task_scheduler_service import SchedulerAsyncPublisher
-
+from backend.task_scheduler_service import TaskManager
 
 publisher = None
 
@@ -34,6 +34,8 @@ if __name__ == '__main__':
     # else:
     #     loop = asyncio.SelectorEventLoop()
     #     asyncio.set_event_loop(loop)
+
+    task_manager = TaskManager()
 
     publisher = SchedulerAsyncPublisher('amqp://guest:guest@localhost:5672/%2F?connection_attempts=3&heartbeat=3600')
     publisher.run_in_external_ioloop(web.asyncio.get_event_loop())
