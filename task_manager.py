@@ -1,25 +1,11 @@
 import uuid
 import time
 
-from backend.task_scheduler_service import ResponseObject, ResponseStatus
-
-
-class Scenario:
-
-    pass
-
-
-class ScenarioProvider:
-
-    def __init__(self):
-        pass
-
-    def get_scenario(self, task_id):
-        return Scenario()
+from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider
 
 
 class TaskStatus:
-    inactive, in_progress, completed, failed = [0, 1, 3, 4]
+    INACTIVE, IN_PROGRESS, COMPLETED, FAILED = [0, 1, 3, 4]
 
 
 class Task:
@@ -32,7 +18,7 @@ class Task:
         self._last_heartbit_time = None
         self._scenario = None
         self._valid = False
-        self._status = Task.inactive
+        self._status = TaskStatus.INACTIVE
 
     def begin(self, provider: ScenarioProvider):
 
@@ -43,7 +29,7 @@ class Task:
             return False
 
         self._valid = True
-        self._status = Task.in_progress
+        self._status = TaskStatus.IN_PROGRESS
         self._last_heartbit_time = self._start_time = time.time()
 
     def next_step(self):
@@ -67,29 +53,28 @@ class Task:
     def status(self):
         return self._status
 
+    def valid(self):
+        return self._valid
+
 
 class TaskManager:
 
-    def __init__(self):
+    def __init__(self, scenario_provider: ScenarioProvider):
 
         self._tasks = {}
-        self._scenario_provider = None  # TODO
+        self._scenario_provider = scenario_provider
 
-    def add_task(self, task_id: int):
+    def add_task(self, task_id: int, payload: dict):
 
         corr_id = uuid.uuid4()
-        task = Task(corr_id)
-        task.begin(provider=self._scenario_provider)
-        if task.status() == TaskStatus.in_progress:
+        task = Task(corr_id, task_id)
+        task.begin(provider=self._scenario_provider)  # TODO ???
+        if task.status() == TaskStatus.IN_PROGRESS:
             self._tasks[corr_id] = task
             return corr_id
         else:
             #  TODO: how do we need react here?
             return None
-
-    def remove_task(self, corr_id):
-
-        del self._tasks[corr_id]
 
     def update_task_status(self, response: ResponseObject):
 
@@ -101,17 +86,18 @@ class TaskManager:
 
         if response.status == ResponseStatus.FAILED:
             task.unroll()
-            self.remove_task(response.corr_id)
+            del self._tasks[response.corr_id]
 
         elif response.status == ResponseStatus.IN_PROGRESS:
             #  Here is the place to log progress
             pass
+
         elif response.status == ResponseStatus.COMPLETED:
-            if task.status() == TaskStatus.in_progress:
+            if task.status() == TaskStatus.IN_PROGRESS:
                 task.next_step()
-            elif task.status() == TaskStatus.completed:
+            elif task.status() == TaskStatus.COMPLETED:
                 task.close()
-                self.remove_task(response.corr_id)
+                del self._tasks[response.corr_id]
             else:
                 raise Exception('incorrect task state')
         else:

@@ -24,7 +24,7 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
     ROUTING_KEY = 'example.text'
 
     def __init__(self, ampq_url: str, task_manager: TaskManager):
-        ExampleConsumer.__init__(self, amqp_url)
+        ExampleConsumer.__init__(self, ampq_url)
         self._task_manager = TaskManager
 
 
@@ -89,7 +89,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
 
         self._connection = self.connect(custom_ioloop=ioloop)
 
-        self._feedback_consumer = SchedulerAsyncFeedbackConsumer(self._url)
+        self._feedback_consumer = SchedulerAsyncFeedbackConsumer(self._url, self._task_manager)
         self._feedback_consumer.QUEUE = self.REPLY_QUEUE
 
         self._feedback_consumer.run_in_external_ioloop(ioloop)
