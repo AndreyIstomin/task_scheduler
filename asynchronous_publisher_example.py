@@ -51,6 +51,10 @@ class ExamplePublisher(object):
         self._stopping = False
         self._url = amqp_url
 
+    def running(self) -> bool:
+
+        return self._channel and self._channel.is_open()
+
     def connect(self, custom_ioloop=None):
         """This method connects to RabbitMQ, returning the connection handle.
         When the connection is established, the on_connection_open method

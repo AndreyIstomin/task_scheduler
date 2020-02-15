@@ -6,6 +6,7 @@ import logging
 import json
 import uuid
 import pika
+from PluginEngine.common import require
 from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer, TaskManager, ResponseObject
 
 
@@ -16,6 +17,12 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
 
+class OnFeedbackCallback:
+
+    def __call__(self, message: bytes):
+        raise NotImplementedError()
+
+
 class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
     EXCHANGE = 'message'
@@ -23,10 +30,9 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
     QUEUE = 'reply-to-queue'
     ROUTING_KEY = 'example.text'
 
-    def __init__(self, ampq_url: str, task_manager: TaskManager):
+    def __init__(self, ampq_url: str, on_message_callback: OnFeedbackCallback):
         ExampleConsumer.__init__(self, ampq_url)
-        self._task_manager = TaskManager
-
+        self._on_message_callback = on_message_callback
 
     def on_message(self, channel, basic_deliver, properties, body):
         """Invoked by pika when a message is delivered from RabbitMQ. The
@@ -43,7 +49,7 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
         """
 
-        self._task_manager.update_task_status(ResponseObject.from_json(body))
+        self._on_message_callback(body)
 
         LOGGER.info('Received message # %s from %s: %s',
                     basic_deliver.delivery_tag, properties.app_id, body)
@@ -71,12 +77,12 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
 class SchedulerAsyncPublisher(ExamplePublisher):
 
-    def __init__(self, ampq_url: str, task_manager: TaskManager):
+    def __init__(self, ampq_url: str, feedback_callback: OnFeedbackCallback):
 
         ExamplePublisher.__init__(self, ampq_url)
 
         self._feedback_consumer = None
-        self._task_manager = task_manager
+        self._feedback_callback = feedback_callback
 
     REPLY_QUEUE = 'feedback_queue'
 
@@ -89,7 +95,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
 
         self._connection = self.connect(custom_ioloop=ioloop)
 
-        self._feedback_consumer = SchedulerAsyncFeedbackConsumer(self._url, self._task_manager)
+        self._feedback_consumer = SchedulerAsyncFeedbackConsumer(self._url, self._feedback_callback)
         self._feedback_consumer.QUEUE = self.REPLY_QUEUE
 
         self._feedback_consumer.run_in_external_ioloop(ioloop)
@@ -102,11 +108,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
         LOGGER.info('Issuing consumer related RPC commands')
         self.enable_delivery_confirmations()
 
-    def publish_message(self, json_data: json):
-        if self._channel is None or not self._channel.is_open:
-            return
-
-        corr_id = self._task_manager.add_task()
+    def publish_message(self, routing_key: str, corr_id: uuid.UUID, payload: 'json'):
 
         properties = pika.BasicProperties(
             app_id='example-publisher',
@@ -115,8 +117,8 @@ class SchedulerAsyncPublisher(ExamplePublisher):
             correlation_id=str(corr_id)
         )
 
-        self._channel.basic_publish(self.EXCHANGE, self.ROUTING_KEY,
-                                    json_data,
+        self._channel.basic_publish(self.EXCHANGE, routing_key,
+                                    payload,
                                     properties)
         self._message_number += 1
         self._deliveries.append(self._message_number)
