@@ -3,13 +3,13 @@ import pika
 import json
 import jsonschema
 from aiohttp import web
+from PluginEngine.common import require
 from backend.task_scheduler_service import SchedulerAsyncPublisher, ScenarioProvider, TaskManager
 from backend.task_scheduler_service.schemas import RUN_TASK_SCHEMA
 
 publisher = None
 scenario_provider = None
 task_manager = None
-
 
 
 async def handle(request):
@@ -25,17 +25,16 @@ async def handle(request):
 
 async def run_task(request):
     data = await request.json()
-
     try:
         jsonschema.validate(data, RUN_TASK_SCHEMA)
     except jsonschema.ValidationError as err:
         return web.Response(status=web.HTTPBadRequest.status_code, text=str(err))
 
-    if task_manager.add_task(task_id=data['task_id'], payload=data):
+    ok, msg = task_manager.start_task(task_id=data['task_id'], payload=data)
+    if ok:
         return web.Response(status=web.HTTPOk.status_code, text=f"Task {data['task_id']} has been created by {data['username']}")
-
     else:
-        return web.Response(status=web.HTTPInternalServerError.status_code)
+        return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
 
 
 app = web.Application()
@@ -62,8 +61,5 @@ if __name__ == '__main__':
 
     scenario_provider = ScenarioProvider()
     task_manager = TaskManager(scenario_provider)
-
-    publisher = SchedulerAsyncPublisher('amqp://guest:guest@localhost:5672/%2F?connection_attempts=3&heartbeat=3600',
-                                        task_manager)
-    publisher.run_in_external_ioloop(web.asyncio.get_event_loop())
+    task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
     web.run_app(app, port=8181)

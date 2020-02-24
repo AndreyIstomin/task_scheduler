@@ -21,7 +21,7 @@ class TaskManagerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
 
-        self._task_manager = TaskManager(scenario_provider=FakeScenarioProvider())
+        self._task_manager = TaskManager(scenario_provider=MockScenarioProvider())
 
     def test_add_task(self):
 

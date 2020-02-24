@@ -14,11 +14,11 @@ class ResponseStatus:
 class ResponseObject:
 
     def __init__(self, owner: uuid.UUID, request_id: uuid.UUID, status: int, progress: float,
-                 error_message=''):
+                 message=''):
 
         self.status = status
         self.progress = progress
-        self.error_message = error_message
+        self.message = message
         self.owner = owner
         self.request_id = request_id
 
@@ -29,7 +29,7 @@ class ResponseObject:
             'request_id': self.request_id,
             'status': self.status,
             'progress': self.progress,
-            'error_message': self.error_message})
+            'message': self.message})
 
     @classmethod
     def from_json(cls, json_data):

@@ -107,15 +107,18 @@ class RPCManager:
 
     # protected methods
     def _run_server(self) -> (bool, str):
-        pass
+
+        return False, 'Error'
 
     def _run_client(self) -> (bool, str):
 
-        self._publisher = SchedulerAsyncPublisher(self._ampq_url, self._feedback_callback)
+        self._publisher = SchedulerAsyncPublisher(self._ampq_url, self._reply_callback)
 
         self._publisher.run_in_external_ioloop(self._io_loop)
 
-    def _feedback_callback(self, payload: bytes):
+        return True, 'Ok'
 
+    def _feedback_callback(self, payload: bytes):
+        """For test purposes"""
         print('Feedback callbakc: ' + str(bytes))
 

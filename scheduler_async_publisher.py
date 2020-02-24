@@ -7,7 +7,7 @@ import json
 import uuid
 import pika
 from PluginEngine.common import require
-from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer, TaskManager, ResponseObject
+from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer
 
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
@@ -17,12 +17,6 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
 
-class OnFeedbackCallback:
-
-    def __call__(self, message: bytes):
-        raise NotImplementedError()
-
-
 class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
     EXCHANGE = 'message'
@@ -30,7 +24,7 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
     QUEUE = 'reply-to-queue'
     ROUTING_KEY = 'example.text'
 
-    def __init__(self, ampq_url: str, on_message_callback: OnFeedbackCallback):
+    def __init__(self, ampq_url: str, on_message_callback):
         ExampleConsumer.__init__(self, ampq_url)
         self._on_message_callback = on_message_callback
 
@@ -77,7 +71,7 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
 class SchedulerAsyncPublisher(ExamplePublisher):
 
-    def __init__(self, ampq_url: str, feedback_callback: OnFeedbackCallback):
+    def __init__(self, ampq_url: str, feedback_callback):
 
         ExamplePublisher.__init__(self, ampq_url)
 
