@@ -16,6 +16,7 @@ class ReplyCallbackInterface:
     def __call__(self, response: ResponseObject):
         raise NotImplementedError()
 
+
 class ExitCallbackInterface:
 
     def __call__(self, response: ResponseObject):
@@ -43,8 +44,8 @@ class RPCManager:
         require(regime in [RPCManager.SERVER, RPCManager.CLIENT])
 
         self._regime = regime
-        self._reply_callback = reply_callback
-        self._exit_callback = exit_callback
+        self._ext_reply_callback = reply_callback
+        self._ext_exit_callback = exit_callback
         self._heart_bit_timeout = heart_bit_timeout
         self._running = False
         self._consumers = {}
@@ -65,7 +66,7 @@ class RPCManager:
         self._consumers[routing_key] = consumer
 
     # Client interface
-    def put_request(self, routing_key: str, owner_id: uuid.UUID, payload: dict)-> (uuid.UUID, str):
+    def put_request(self, routing_key: str, owner_id: uuid.UUID, payload: dict) -> (uuid.UUID, str):
         require(self._regime == RPCManager.CLIENT)
         require(self._publisher)
         require(self._publisher.running())
@@ -83,7 +84,7 @@ class RPCManager:
 
         return request_id, 'Ok'
 
-    def close_request(self, request_id: uuid.UUID)-> (bool, str):
+    def close_request(self, request_id: uuid.UUID) -> (bool, str):
 
         if request_id in self._requests:
             """
@@ -118,7 +119,24 @@ class RPCManager:
 
         return True, 'Ok'
 
-    def _feedback_callback(self, payload: bytes):
-        """For test purposes"""
-        print('Feedback callbakc: ' + str(bytes))
+    def _reply_callback(self, payload: bytes):
+        #  For test purposes
+        print('Feedback callback: ' + str(bytes))
+
+        try:
+            response = ResponseObject.from_json(payload)
+        except json.JSONDecodeError as err:
+            #  TODO: process the exception
+            pass
+
+        if response.status is ResponseStatus.COMPLETED:
+            # TODO: close the process
+            pass
+        elif response.status is ResponseStatus.FAILED:
+            # TODO: handle the case
+            pass
+
+        self._ext_reply_callback(response)
+
+
 

@@ -32,7 +32,7 @@ class ResponseObject:
             'message': self.message})
 
     @classmethod
-    def from_json(cls, json_data):
+    def from_json(cls, json_data: bytes):
 
         d = json.loads(json_data)
         return cls(**d)

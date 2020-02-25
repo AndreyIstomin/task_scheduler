@@ -42,11 +42,11 @@ class Task:
     def current_request(self) -> str:
         require(self._valid)
         require(self._scenario)
-        if self._curr_step == self._scenario.step_count()
+        if self._curr_step == self._scenario.step_count():
             return None
         return self._scenario.get_request(self._curr_step)
 
-    def next_step(self)-> bool:
+    def next_step(self) -> bool:
         require(self._valid)
         require(self._scenario)
         if self._curr_step < self._curr_step.step_count():
@@ -192,7 +192,6 @@ class TaskManager:
                 self._closed_tasks[response.owner] = task_data
                 #
                 del self._tasks[response.owner]
-
 
     def run_in_external_ioloop(self, io_loop):
 
