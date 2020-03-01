@@ -53,7 +53,7 @@ class ExamplePublisher(object):
 
     def running(self) -> bool:
 
-        return self._channel and self._channel.is_open()
+        return self._channel and self._channel.is_open
 
     def connect(self, custom_ioloop=None):
         """This method connects to RabbitMQ, returning the connection handle.

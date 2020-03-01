@@ -25,3 +25,38 @@ SCENARIO_SCHEMA = {
     }
 }
 
+RESPONSE_SCHEMA = {
+    "$schema": "http://json-schema.org/schema#",
+    "type": "object",
+    "properties": {
+        "owner": {
+            "type": "string"
+        },
+
+        "request_id": {
+            "type": "string"
+        },
+
+        "status": {
+            "type": "integer"
+        },
+
+        "progress": {
+            "type": "number"
+        },
+
+        "message": {
+            "type": "string"
+        }
+    },
+
+    "required": [
+        "owner",
+        "request_id",
+        "status",
+        "progress",
+        "message"
+    ],
+}
+
+

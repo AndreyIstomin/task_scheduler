@@ -48,18 +48,9 @@ app.add_routes([])
 
 if __name__ == '__main__':
 
-    # import sys
-    #
-    # if sys.platform == "win32":
-    #     from asyncio.windows_events import ProactorEventLoop
-    #
-    #     loop = ProactorEventLoop()
-    #     asyncio.set_event_loop(loop)
-    # else:
-    #     loop = asyncio.SelectorEventLoop()
-    #     asyncio.set_event_loop(loop)
+    from backend.task_scheduler_service import test_ampq_url
 
     scenario_provider = ScenarioProvider()
-    task_manager = TaskManager(scenario_provider)
+    task_manager = TaskManager(test_ampq_url, scenario_provider)
     task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
     web.run_app(app, port=8181)

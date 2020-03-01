@@ -1,10 +1,12 @@
 import uuid
 import time
 from collections import defaultdict
-from frozendict import frozendict
+from PluginEngine import Log
 from PluginEngine.common import require
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager
 
+
+empty_uuid = uuid.UUID('00000000-0000-0000-0000-000000000000')
 
 class RPCStatus:
     INACTIVE, IN_PROGRESS, COMPLETED, FAILED = [0, 1, 3, 4]
@@ -49,7 +51,7 @@ class Task:
     def next_step(self) -> bool:
         require(self._valid)
         require(self._scenario)
-        if self._curr_step < self._curr_step.step_count():
+        if self._curr_step < self._scenario.step_count():
             self._curr_step += 1
             return True
         else:
@@ -75,6 +77,7 @@ class RPCData:
 
     def __init__(self, request_id: uuid.UUID):
 
+        require(isinstance(request_id, uuid.UUID))
         self.uuid = request_id
         self.progress = 0.0
         self.status = RPCStatus.INACTIVE
@@ -90,13 +93,13 @@ class TaskData:
 
 class TaskManager:
 
-    def __init__(self, scenario_provider: ScenarioProvider):
+    def __init__(self, ampq_url: str, scenario_provider: ScenarioProvider):
 
         self._tasks = defaultdict(TaskData)
-        self._closed_tasks = frozendict(TaskData)
+        self._closed_tasks = []
         self._scenario_provider = scenario_provider
         self._rpc_manager = None
-        self._ampq_url = 'amqp://guest:guest@localhost:5672/%2F?connection_attempts=3&heartbeat=3600'  # TODO: get it from config!!!
+        self._ampq_url = ampq_url
 
     def start_task(self, task_id: int, payload: dict) -> (uuid.UUID, str):
 
@@ -119,22 +122,27 @@ class TaskManager:
 
             task.start()
             request_id, msg = self._rpc_manager.put_request(task.current_request(), task_uuid, task.payload)
-            rpc = RPCData(request_id)
-            rpc.message = msg
+
 
             if request_id:
+                rpc = RPCData(request_id)
+                rpc.message = msg
                 rpc.status = RPCStatus.IN_PROGRESS
-                task_data =self._tasks[task_uuid]
+                task_data = self._tasks[task_uuid] = TaskData()
                 task_data.task = task
                 task_data.requests.append(rpc)
                 return task_uuid, 'Ok'
             else:
+                rpc = RPCData(empty_uuid)
+                rpc.message = msg
                 task.unroll()
                 # Here the place to log put request failed
                 rpc.status = RPCStatus.FAILED
-                task_data = self._closed_tasks[task_uuid]
+                task_data = TaskData()
                 task_data.task = task
                 task_data.requests = [rpc]
+
+                self._closed_tasks = (task_uuid, task_data)
                 #
                 return None, msg
         else:
@@ -142,9 +150,12 @@ class TaskManager:
 
     def update_task_status(self, response: ResponseObject):
 
-        require(response.owner in self._tasks)
+        if response.owner not in self._tasks:
+            Log.warn(f'Unknown task id: {response.owner}')
+            return
+
         task_data = self._tasks[response.owner]
-        require(task_data.requests[-1] == response.request_id)
+        require(task_data.requests[-1].uuid == response.request_id)
         task = task_data.task
         task.update_heartbit_time()
 
@@ -157,7 +168,7 @@ class TaskManager:
             task.unroll()
             # Here is the place to handle failure
             rpc.status = RPCStatus.FAILED
-            self._closed_tasks[response.owner] = task_data
+            self._closed_tasks = (response.owner, task_data)
             #
             del self._tasks[response.owner]
 
@@ -174,33 +185,34 @@ class TaskManager:
             if task.next_step():
 
                 request_id, msg = self._rpc_manager.put_request(task.current_request(), response.owner, task.payload)
+                if request_id:
+                    rpc = RPCData(request_id)
+                    rpc.message = msg
+                    task_data.requests.append(rpc)
 
-                rpc = RPCData(request_id)
-                rpc.message = msg
-                task_data.requests.append(rpc)
-                if not request_id:
+                else:
                     task.unroll()
                     # Here the place to log put request failed
                     rpc.status = RPCStatus.FAILED
-                    self._closed_tasks[response.owner] = task_data
+                    self._closed_tasks = (response.owner, task_data)
                     #
                     del self._tasks[response.owner]
 
             else:
                 task.close()
                 #  Here is the place to log task completeness
-                self._closed_tasks[response.owner] = task_data
+                self._closed_tasks = (response.owner, task_data)
                 #
                 del self._tasks[response.owner]
 
     def run_in_external_ioloop(self, io_loop):
 
         self._rpc_manager = RPCManager(RPCManager.CLIENT, ampq_url=self._ampq_url,
+                                       heart_bit_timeout=5,
                                        reply_callback=self.update_task_status,
-                                       exit_callback=self.update_task_status,
-                                       heart_bit_timeout=5)
+                                       exit_callback=self.update_task_status)
 
-        self._rpc_manager.run(io_loop)
+        self._rpc_manager.run_async(io_loop)
 
 
 

@@ -24,7 +24,8 @@ class ScenarioProvider:
         Temp implementation
         """
 
-        steps = ['import_road_osm', 'generate_road']
+        # steps = ['import_road_osm', 'generate_road']
+        steps = ['test_consumer', 'test_consumer']
         json_data = json.dumps(steps)
 
         try:
@@ -39,4 +40,4 @@ class ScenarioProvider:
         if sc.step_count() == 0:
             return None, 'Empty scenario'
 
-        return sc
+        return sc, 'Ok'

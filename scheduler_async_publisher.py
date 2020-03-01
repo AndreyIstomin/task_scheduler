@@ -71,14 +71,21 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
 class SchedulerAsyncPublisher(ExamplePublisher):
 
-    def __init__(self, ampq_url: str, feedback_callback):
+    def __init__(self, ampq_url: str, feedback_callback, exchange):
 
+        ExamplePublisher.EXCHANGE = exchange
+        ExamplePublisher.EXCHANGE_TYPE = 'direct'
         ExamplePublisher.__init__(self, ampq_url)
 
         self._feedback_consumer = None
         self._feedback_callback = feedback_callback
 
-    REPLY_QUEUE = 'feedback_queue'
+    REPLY_ROUTING_KEY = 'feedback'
+
+    def on_exchange_declareok(self, _unused_frame, userdata):
+
+        """Skip declaring queue"""
+        LOGGER.info('Exchange declared: %s', userdata)
 
     def run_in_external_ioloop(self, ioloop):
         self._connection = None
@@ -90,7 +97,9 @@ class SchedulerAsyncPublisher(ExamplePublisher):
         self._connection = self.connect(custom_ioloop=ioloop)
 
         self._feedback_consumer = SchedulerAsyncFeedbackConsumer(self._url, self._feedback_callback)
-        self._feedback_consumer.QUEUE = self.REPLY_QUEUE
+        self._feedback_consumer.EXCHANGE = self.EXCHANGE
+        self._feedback_consumer.EXCHANGE_TYPE = 'direct'
+        self._feedback_consumer.ROUTING_KEY = self.REPLY_ROUTING_KEY
 
         self._feedback_consumer.run_in_external_ioloop(ioloop)
 
@@ -105,9 +114,9 @@ class SchedulerAsyncPublisher(ExamplePublisher):
     def publish_message(self, routing_key: str, corr_id: uuid.UUID, payload: 'json'):
 
         properties = pika.BasicProperties(
-            app_id='example-publisher',
+            app_id='scheduler_async_publisher',
             content_type='application/json',
-            reply_to=self.REPLY_QUEUE,
+            reply_to=self.REPLY_ROUTING_KEY,
             correlation_id=str(corr_id)
         )
 
