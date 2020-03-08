@@ -7,5 +7,3 @@ from .rpc_common import ReplyCallbackInterface, ExitCallbackInterface
 from .rpc_consumer import RPCConsumer, RPCConsumerInput, TestRPCConsumer
 from .rpc_manager import RPCManager
 from .task_manager import TaskManager
-
-test_ampq_url = 'amqp://guest:guest@localhost:5672/%2F?connection_attempts=3&heartbeat=3600'
