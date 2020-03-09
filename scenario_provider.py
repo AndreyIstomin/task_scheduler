@@ -4,14 +4,18 @@ from backend.task_scheduler_service.schemas import SCENARIO_SCHEMA
 
 
 class Scenario:
-    def __init__(self, steps: 'list of strings'):
-        self.__steps = steps
+    def __init__(self, name: str, steps: 'list of strings'):
+        self._name = name
+        self._steps = steps
 
     def step_count(self) -> int:
-        return len(self.__steps)
+        return len(self._steps)
+
+    def name(self):
+        return self._name
 
     def get_request(self, step: int) -> str:
-        return self.__steps[step]
+        return self._steps[step]
 
 
 class ScenarioProvider:
@@ -26,12 +30,13 @@ class ScenarioProvider:
 
         # steps = ['import_road_osm', 'generate_road']
         steps = ['test_consumer', 'test_consumer']
+        name = 'test_scenario'
         json_data = json.dumps(steps)
 
         try:
             steps = json.loads(json_data)
             jsonschema.validate(steps, SCENARIO_SCHEMA)
-            sc = Scenario(steps)
+            sc = Scenario(name, steps)
         except json.JSONDecodeError as err:
             return None, 'Invalid scenario JSON'
         except jsonschema.ValidationError as err:

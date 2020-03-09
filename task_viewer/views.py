@@ -15,8 +15,8 @@ class ChatList(web.View):
         # message = Message(self.request)
         # messages = await message.get_messages()
         return {'messages': [
-            {'user': 'user1', 'msg': 'hello', 'time': datetime.now()},
-            {'user': 'user1', 'msg': 'ololo', 'time': datetime.now()}
+            # {'user': 'user1', 'msg': 'hello', 'time': datetime.now()},
+            # {'user': 'user1', 'msg': 'world', 'time': datetime.now()}
         ] }
 
 

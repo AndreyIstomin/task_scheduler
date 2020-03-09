@@ -1,3 +1,4 @@
+import uuid
 from PluginEngine import Log
 from PluginEngine.common import require
 from backend.task_scheduler_service.common import ResponseObject
@@ -39,3 +40,23 @@ class ExitCallbackInterface:
 
     def __call__(self, response: ResponseObject):
         raise NotImplementedError()
+
+
+class RPCStatus:
+    INACTIVE, IN_PROGRESS, COMPLETED, FAILED = [0, 1, 2, 3]
+
+    @staticmethod
+    def verbose(status: int):
+        return ['inactive', 'in progress', 'completed', 'failed'][status]
+
+
+class RPCData:
+
+    def __init__(self, request_id: uuid.UUID, routing_key: str, progress: float, status: RPCStatus, message: str):
+
+        require(isinstance(request_id, uuid.UUID))
+        self.uuid = request_id
+        self.routing_key = routing_key
+        self.progress = progress
+        self.status = status
+        self.message = message

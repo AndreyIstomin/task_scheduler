@@ -4,12 +4,14 @@ import jinja2
 import aiohttp_jinja2
 from aiohttp import web
 from backend.config import SERVICE_CONFIG
-from backend.task_scheduler_service import ScenarioProvider, TaskManager
+from backend.task_scheduler_service import ScenarioProvider, TaskManager, TaskLogger
 from backend.task_scheduler_service.schemas import RUN_TASK_SCHEMA
 from backend.task_scheduler_service.routes import routes
 
 scenario_provider = None
 task_manager = None
+the_app = None
+
 
 async def run_task(request):
     data = await request.json()
@@ -18,11 +20,7 @@ async def run_task(request):
     except jsonschema.ValidationError as err:
         return web.Response(status=web.HTTPBadRequest.status_code, text=str(err))
 
-    logger = Logger(request)
     ok, msg = task_manager.start_task(task_id=data['task_id'], payload=data)
-    logger.add_msg(f'new task: {msg}')
-
-    await logger.send()
 
     if ok:
         return web.Response(status=web.HTTPOk.status_code, text=f"Task {data['task_id']} has been created by {data['username']}")
@@ -46,21 +44,21 @@ async def on_shutdown(app):
 
 class Logger:
 
-    def __init__(self, request):
+    def __init__(self, app):
 
-        self.__websockets = request.app['websockets']
+        self.__app = app
         self.__msg_queue = []
 
     def add_msg(self, msg: str):
         self.__msg_queue.append(msg)
 
     async def send(self):
-        for _ws in self.__websockets:
+        for _ws in self.__app['websockets']:
             for msg in self.__msg_queue:
                 await _ws.send_str(msg)
 
 
-async def init():
+def init():
 
     base_dir = os.path.dirname(__file__)
 
@@ -88,11 +86,12 @@ async def init():
 
 if __name__ == '__main__':
 
-    app = init()
+    the_app = init()
+    logger = TaskLogger(the_app)
 
     scenario_provider = ScenarioProvider()
-    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['ampq_url'], scenario_provider)
+    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['ampq_url'], scenario_provider, logger)
     task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
-    web.run_app(app,
+    web.run_app(the_app,
                 host=SERVICE_CONFIG['task_scheduler_service']['IP'],
                 port=SERVICE_CONFIG['task_scheduler_service']['port'])

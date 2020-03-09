@@ -29,9 +29,6 @@ RESPONSE_SCHEMA = {
     "$schema": "http://json-schema.org/schema#",
     "type": "object",
     "properties": {
-        "owner": {
-            "type": "string"
-        },
 
         "request_id": {
             "type": "string"
@@ -51,7 +48,6 @@ RESPONSE_SCHEMA = {
     },
 
     "required": [
-        "owner",
         "request_id",
         "status",
         "progress",

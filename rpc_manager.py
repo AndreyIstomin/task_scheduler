@@ -4,10 +4,10 @@ import json
 import jsonschema
 from multiprocessing import Process, Value
 from PluginEngine import Log
-from PluginEngine.common import require
-from backend.task_scheduler_service import SchedulerAsyncPublisher, RPCConsumer, RPCConsumerInput
+from PluginEngine.common import require, empty_uuid
+from backend.task_scheduler_service import SchedulerAsyncPublisher, RPCConsumerInput
 from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
-from backend.task_scheduler_service.rpc_common import RPCBase, ReplyCallbackInterface, ExitCallbackInterface
+from backend.task_scheduler_service.rpc_common import RPCBase, RPCData, RPCStatus
 
 
 class RPCConsumerData:
@@ -24,8 +24,7 @@ class RPCManager(RPCBase):
 
     class Request:
 
-        def __init__(self, owner_id: uuid.UUID):
-            self.owner = owner_id
+        def __init__(self):
             self.heart_bit_time = self.start_time = time.time()
             self.running = True
 
@@ -61,23 +60,22 @@ class RPCManager(RPCBase):
         self._consumers[routing_key] = RPCConsumerData(instance_count)
 
     # Client interface
-    def put_request(self, routing_key: str, owner_id: uuid.UUID, payload: dict) -> (uuid.UUID, str):
+    def put_request(self, routing_key: str, payload: dict) -> RPCData:
         require(self._regime == RPCManager.CLIENT)
         require(self._publisher)
         require(self._publisher.running())
 
         d = dict(payload)
-        d['owner_id'] = str(owner_id)
 
         if routing_key not in self._known_consumers:
-            return None, 'Unknown routing key'
+            return RPCData(empty_uuid, routing_key, 0.0, RPCStatus.FAILED, 'Unknown routing key')
 
         json_payload = json.dumps(d)
         request_id = uuid.uuid4()
         self._publisher.publish_message(routing_key=routing_key, corr_id=request_id, payload=json_payload)
-        self._requests[request_id] = RPCManager.Request(owner_id)
+        self._requests[request_id] = RPCManager.Request()
 
-        return request_id, 'Ok'
+        return RPCData(request_id, routing_key, 0.0, RPCStatus.IN_PROGRESS, 'Ok')
 
     def close_request(self, request_id: uuid.UUID) -> (bool, str):
 

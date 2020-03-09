@@ -47,21 +47,21 @@ class RPCConsumer(RPCBase):
 
     def publish_error(self, err_message: str):
 
-        response = ResponseObject(owner=self._payload['owner_id'], request_id=self._properties.correlation_id,
+        response = ResponseObject(request_id=self._properties.correlation_id,
                                   status=ResponseStatus.FAILED, progress=0.0, message=err_message)
 
         self._publish_response(response)
 
     def publish_progress(self, progress: '[0.0, 1.0]', message=""):
 
-        response = ResponseObject(owner=self._payload['owner_id'], request_id=self._properties.correlation_id,
+        response = ResponseObject(request_id=self._properties.correlation_id,
                                   status=ResponseStatus.IN_PROGRESS, progress=progress, message=message)
 
         self._publish_response(response)
 
     def publish_completed(self, message):
 
-        response = ResponseObject(owner=self._payload['owner_id'], request_id=self._properties.correlation_id,
+        response = ResponseObject(request_id=self._properties.correlation_id,
                                   status=ResponseStatus.COMPLETED, progress=1.0, message=message)
 
         self._publish_response(response)

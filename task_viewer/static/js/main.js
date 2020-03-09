@@ -1,3 +1,5 @@
+// https://habr.com/ru/post/200866/
+
 $(document).ready(function(){
     try{
         var sock = new WebSocket('ws://' + window.location.host + '/ws');
@@ -13,6 +15,21 @@ $(document).ready(function(){
             date = new Date();
             options = {hour12: false};
         messageElem.append($('<p>').html('[' + date.toLocaleTimeString('en-US', options) + '] ' + message + '\n'));
+        messageElem.find('p').each(function(i, value){
+            height += parseInt($(this).height());
+        });
+
+        messageElem.animate({scrollTop: height});
+    }
+
+    function updateTaskDescription(json_data) {
+        var obj = JSON.parse(json_data);
+        //console.log(typeof(obj));
+        var messageElem = $('#subscribe'),
+            height = 0,
+            date = new Date();
+            options = {hour12: false};
+        messageElem.append($('<p>').html('[' + date.toLocaleTimeString('en-US', options) + '] ' + JSON.stringify(obj) + '\n'));
         messageElem.find('p').each(function(i, value){
             height += parseInt($(this).height());
         });
@@ -43,7 +60,7 @@ $(document).ready(function(){
 
     // income message handler
     sock.onmessage = function(event) {
-      showMessage(event.data);
+      updateTaskDescription(event.data);
     };
 
     $('#signout').click(function(){

@@ -16,19 +16,17 @@ class ResponseStatus:
 
 class ResponseObject:
 
-    def __init__(self, owner: str, request_id: str, status: int, progress: float,
+    def __init__(self, request_id: str, status: int, progress: float,
                  message=''):
 
         self.status = status
         self.progress = progress
         self.message = message
-        self.owner = uuid.UUID(owner)
         self.request_id = uuid.UUID(request_id)
 
     def to_json(self):
 
         return json.dumps({
-            'owner': str(self.owner),
             'request_id': str(self.request_id),
             'status': self.status,
             'progress': self.progress,
