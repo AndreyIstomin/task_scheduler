@@ -45,7 +45,7 @@ class TaskManager:
                 task_data.task = task
                 task_data.requests.append(rpc)
                 self._requests[rpc.uuid] = task.uuid()
-                result = task_uuid, 'Ok'
+                result = task_uuid, 'The task has been created'
             else:
                 task.unroll()
                 # Here the place to log put request failed

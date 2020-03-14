@@ -75,7 +75,7 @@ class RPCManager(RPCBase):
         self._publisher.publish_message(routing_key=routing_key, corr_id=request_id, payload=json_payload)
         self._requests[request_id] = RPCManager.Request()
 
-        return RPCData(request_id, routing_key, 0.0, RPCStatus.IN_PROGRESS, 'Ok')
+        return RPCData(request_id, routing_key, 0.0, RPCStatus.IN_PROGRESS, 'The request has been sent')
 
     def close_request(self, request_id: uuid.UUID) -> (bool, str):
 

@@ -72,9 +72,14 @@ class RPCConsumer(RPCBase):
             self._ch.basic_ack(delivery_tag=self._method.delivery_tag)
             self._task_is_closed = True
 
+    def _reset_state(self):
+        self._task_is_closed = False
+
     def _callback(self, ch, method, properties, body):
 
         Log.info(f"The {self._instance_id()}th test RPC consumer got task")
+        self._reset_state()
+
         #  First of all update vars
         self._ch = ch
         self._method = method
@@ -92,6 +97,7 @@ class RPCConsumer(RPCBase):
         try:
             self.run_task()
         except Exception as err:
+            Log.error(f'Consumer {self.get_routing_key()} exception: {str(err)}')
             self.publish_error(f"Exception {err}")
         finally:
             self.notify_task_closed()
