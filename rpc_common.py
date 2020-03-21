@@ -1,13 +1,18 @@
 import uuid
+import time
 from PluginEngine import Log
 from PluginEngine.common import require
+from backend.task_scheduler_service import Scenario
 from backend.task_scheduler_service.common import ResponseObject
 
 
 class RPCBase:
+
+    class ConsumerAlreadyRegisteredException(Exception):
+        pass
+
     STOP_REQUEST_ROUTING_KEY = 'stop_request'
     EXCHANGE = 'rpc_manager'
-    CONSUMER_QUEUE = 'rpc_queue'
     PREFETCH_COUNT = 1
 
     _known_consumers = {}
@@ -18,16 +23,25 @@ class RPCBase:
 
         def register(class_):
             if routing_key not in cls._known_consumers:
-                Log.info(f'{routing_key} has been registered as {cls.__name__}')
+                Log.info(f'{routing_key} has been registered as RPC consumer')
                 class_._routing_key = routing_key
                 cls._known_consumers[class_.get_routing_key()] = class_
 
             else:
-                raise Log.error(f'{routing_key} is already registered')
+                raise RPCBase.ConsumerAlreadyRegisteredException(f'{routing_key} is already registered')
 
             return class_
 
         return register
+
+    @classmethod
+    def check_scenario(cls, scenario: Scenario) -> (bool, str):
+
+        print(cls._known_consumers)
+        error_msg = ','.join(request for request in scenario if request not in cls._known_consumers)
+
+        ok = error_msg == ''
+        return ok, 'Ok' if ok else f'Incorrect scenario {scenario.name()}, unknown requests: ' + error_msg
 
 
 class ReplyCallbackInterface:
@@ -36,18 +50,24 @@ class ReplyCallbackInterface:
         raise NotImplementedError()
 
 
-class ExitCallbackInterface:
+class RPCErrorCallbackInterface:
 
-    def __call__(self, response: ResponseObject):
-        raise NotImplementedError()
+    def on_response_json_decode_error(self, ex: Exception):
+        raise NotImplementedError
+
+    def on_response_json_validation_error(self, ex: Exception):
+        raise NotImplementedError
+
+    def on_unknown_request_id(self):
+        raise NotImplementedError
 
 
 class RPCStatus:
-    INACTIVE, IN_PROGRESS, COMPLETED, FAILED = [0, 1, 2, 3]
+    INACTIVE, WAITING, IN_PROGRESS, COMPLETED, FAILED = 0, 1, 2, 3, 4
 
     @staticmethod
     def verbose(status: int):
-        return ['inactive', 'in progress', 'completed', 'failed'][status]
+        return ['inactive', 'waiting', 'in progress', 'completed', 'failed'][status]
 
 
 class RPCData:
@@ -60,3 +80,17 @@ class RPCData:
         self.progress = progress
         self.status = status
         self.message = message
+        self._heartbit_time = None
+
+    def update_heartbit_time(self):
+
+        if self.status is RPCStatus.WAITING:
+            self.status = RPCStatus.IN_PROGRESS
+
+        self._heartbit_time = time.time()
+
+    def set_completed(self):
+        self.status = RPCStatus.COMPLETED
+
+    def set_failed(self):
+        self.status = RPCStatus.FAILED

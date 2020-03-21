@@ -9,21 +9,26 @@
     <link rel="icon" 
             type="image/png" 
             href="{{ static('task_viewer/img/favicon.png') }}">
+    <link rel="stylesheet" type="text/css" href="{{ static('css/base.css') }}"/>
     <link rel="stylesheet" type="text/css" href="{{ static('bootstrap/css/bootstrap.min.css') }}"/>
     <link rel="stylesheet" type="text/css" href="{{ static('bootstrap/css/bootstrap-grid.min.css') }}"/>
-    <link rel="stylesheet" type="text/css" href="{{ static('bootstrap/css/bootstrap-reboot.min.css') }}"/>
+<!--    <link rel="stylesheet" type="text/css" href="{{ static('bootstrap/css/bootstrap-reboot.min.css') }}"/>-->
     <script src="{{ static('js/jquery-3.4.1.min.js') }}"></script>
-    <script src="{{ static('bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<!--    <script src="{{ static('bootstrap/js/bootstrap.bundle.min.js') }}"></script>-->
     <script src="{{ static('bootstrap/js/bootstrap.min.js') }}"></script>
     {% block head %}
     {% endblock %}
 </head>
-<body>
+<body class="container">
+<div class="page-header">
+    <h1>Event desk <span class="label label-default" >beta</span></h1>
+    <h3><small>Constanta Design &copy</small></h3>
+</div>
     {% block content%}
     {% endblock %}
 </body>
 <footer>
-    <p>Property of CONSTANTA DESIGN 2020</p>
+<!--    <p>Property of CONSTANTA DESIGN 2020</p>-->
     {% block footer %}
     {% endblock %}
 </footer>

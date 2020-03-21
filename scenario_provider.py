@@ -17,6 +17,10 @@ class Scenario:
     def get_request(self, step: int) -> str:
         return self._steps[step]
 
+    def __iter__(self):
+
+        return self._steps.__iter__()
+
 
 class ScenarioProvider:
 
@@ -29,7 +33,7 @@ class ScenarioProvider:
         """
 
         # steps = ['import_road_osm', 'generate_road']
-        steps = ['test_consumer', 'test_consumer']
+        steps = ['consumer_A', 'consumer_B']
         name = 'test_scenario'
         json_data = json.dumps(steps)
 

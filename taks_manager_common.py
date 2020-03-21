@@ -1,7 +1,7 @@
 import time
 import uuid
 from PluginEngine.common import require
-from backend.task_scheduler_service import ScenarioProvider
+from backend.task_scheduler_service import ScenarioProvider, RPCBase
 
 
 class Task:
@@ -10,8 +10,6 @@ class Task:
 
         self._uuid = task_uuid
         self._task_id = task_id
-        self._start_time = None
-        self._last_heartbit_time = None
         self._scenario = None
         self._valid = False
         self._curr_step = None
@@ -28,13 +26,16 @@ class Task:
             self._valid = False
             return False, msg
 
+        ok, msg = RPCBase.check_scenario(self._scenario)
+        if not ok:
+            return False, msg
+
         self._valid = True
         self._curr_step = 0
         return True, 'Ok'
 
     def start(self):
         self._curr_step = 0
-        self._last_heartbit_time = self._start_time = time.time()
 
     def current_request(self) -> str:
         require(self._valid)
@@ -60,12 +61,6 @@ class Task:
         require(self._valid)
         return True
 
-    def update_heartbit_time(self):
-        require(self._valid)
-        self._last_heartbit_time = time.time()
-
-    def heartbit_time(self):
-        return self._last_heartbit_time
 
     def name(self):
         if self._scenario:

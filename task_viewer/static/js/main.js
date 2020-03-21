@@ -1,5 +1,18 @@
 // https://habr.com/ru/post/200866/
 
+const TaskStatus = {"INACTIVE": 0, "WAITING": 1, "IN_PROGRESS": 2, "COMPLETED": 3, "FAILED": 4};
+Object.freeze(TaskStatus);
+
+const EventType = {"MESSASGE": 0, "TASK": 1};
+Object.freeze(EventType);
+
+const LogLevel = {"TRACE": 0, "DEBUG": 1, "INFO": 2, "WARN": 3, "ERROR": 4, "SUCCESS": 5};
+Object.freeze(LogLevel);
+
+const LogLevelToBSClass = ["text-muted", "text-muted", "text", "text-warning", "text-danger", "text-success"]
+
+const RPCStatusToText = ["inactive", "waiting", "in progress", "completed", "failed"]
+
 $(document).ready(function(){
     try{
         var sock = new WebSocket('ws://' + window.location.host + '/ws');
@@ -8,65 +21,103 @@ $(document).ready(function(){
         var sock = new WebSocket('wss://' + window.location.host + '/ws');
     }
 
+    function updateProgressBar(subTaskBlock, obj) {
+
+        let progress = subTaskBlock.querySelector('.progress');
+
+        if(obj.status == TaskStatus.IN_PROGRESS) {
+            if (progress) {
+                progress.childNodes[0].setAttribute("style", `width:${Math.floor(obj.progress * 100.0)}%`)
+            } else {
+
+                progress = document.createElement('div');
+                progress.setAttribute('class', 'progress');
+                progress.innerHTML = `<div class="progress-bar" role="progressbar"
+                aria-valuemin="0" aria-valuemax="100" style="width:${Math.floor(obj.progress * 100.0)}%">`;
+                subTaskBlock.append(progress)
+            }
+        }
+        else if(progress)
+            subTaskBlock.removeChild(progress)
+    }
+
     // fill sub task block
     function updateSubTask(taskBlock, obj) {
         let subTaskBlock = document.getElementById(obj.uuid);
         if(!subTaskBlock)
         {
-            subTaskBlock = document.createElement('div')
-            subTaskBlock.setAttribute('id', obj.uuid)
-            subTaskBlock.append(document.createElement('p'))
-            subTaskBlock.append(document.createElement('p'))
-            taskBlock.append(subTaskBlock)
+            subTaskBlock = document.createElement('a');
+            subTaskBlock.setAttribute('id', obj.uuid);
+            subTaskBlock.setAttribute('class','list-group-item');
+            subTaskBlock.setAttribute('href', '#');
+            subTaskBlock.innerHTML = `<h5 class="list-group-item-heading"> ${obj.name}
+<small class="message">${obj.msg}</small><span class="badge">${RPCStatusToText[obj.status]}</span></h5>`;
+//            subTaskBlock.innerHTML = `${obj.name}: <small class="message">${obj.msg}</small><span class="badge">${RPCStatusToText[obj.status]}</span>`
+            taskBlock.append(subTaskBlock);
         }
-        subTaskBlock.childNodes[0].innerText = `uuid: ${obj.uuid}, name: ${obj.name}`
-        subTaskBlock.childNodes[1].innerText = `progress: ${obj.progress}, message: ${obj.msg}`
+
+        subTaskBlock.querySelector('.message').innerText = obj.msg;
+        subTaskBlock.querySelector('.badge').innerText = RPCStatusToText[obj.status];
+        updateProgressBar(subTaskBlock, obj);
     }
 
     // fill task block (create if need)
     function updateTaskBlock(parent, obj) {
+
         let taskBlock = document.getElementById(obj.uuid),
             date = new Date(),
             options = {hour12: false};
         if(!taskBlock) {
             taskBlock = document.createElement('div');
             taskBlock.setAttribute('id', obj.uuid);
-            taskBlock.setAttribute('class', 'container')
-            parent.append(taskBlock);
+            taskBlock.setAttribute('class', 'task-block')
+            taskBlock.append(prepareMsgElement(obj.name, LogLevel.INFO));
+            taskBlock.append(document.createElement('div', {'class': 'list-group'}));
+            taskBlock.append(document.createElement('p'));
+            parent.append(taskBlock)
         }
-
-        taskBlock.innerText = '[' + date.toLocaleTimeString('en-US', options) + '] ' + obj.name;
-        let i = 0
+        let i = 0;
         for(;i < obj.steps.length; i++){
-            updateSubTask(taskBlock, obj.steps[i]);
+            updateSubTask(taskBlock.childNodes[1], obj.steps[i]);
         }
+    }
+
+    function prepareMsgElement(msg, level){
+        let obj = document.createElement('p');
+        let date = new Date();
+        let opts ={hour12: false};
+        obj.setAttribute('class', LogLevelToBSClass[level]);
+        obj.innerText = `[${date.toLocaleTimeString('en-US', opts)}] ${msg}`;
+        return obj;
     }
 
     // show message in div#subscribe
     function showMessage(message) {
-        let messageElem = $('#subscribe'),
-            height = 0,
-            date = new Date();
-            options = {hour12: false};
-        messageElem.append($('<p>').html('[' + date.toLocaleTimeString('en-US', options) + '] ' + message + '\n'));
-        messageElem.find('p').each(function(i, value){
-            height += parseInt($(this).height());
-        });
-
-        messageElem.animate({scrollTop: height});
+        let messageElem = document.getElementById('subscribe');
+        messageElem.append(prepareMsgElement(message, LogLevel.WARN));
     }
 
-    function updateTaskDescription(json_data) {
-        let obj = JSON.parse(json_data);
-        //console.log(typeof(obj));
-        let messageElem = $('#subscribe'),
-            height = 0;
-        updateTaskBlock(messageElem, obj)
-        messageElem.find('div').each(function(i, value){
-            height += parseInt($(this).height());
-        });
+    function showLogMessage(obj) {
+        let messageElem = document.getElementById('subscribe');
+        messageElem.append(prepareMsgElement(obj.msg, obj.level))
+    }
 
-        messageElem.animate({scrollTop: height});
+    function updateTaskDescription(obj) {
+
+        //console.log(typeof(obj));
+        let messageElem = document.getElementById('subscribe');
+        updateTaskBlock(messageElem, obj);
+    }
+
+    function showLog(json_data) {
+        let obj = JSON.parse(json_data);
+        if(obj.type == EventType.MESSASGE)
+            showLogMessage(obj);
+        else if(obj.type == EventType.TASK)
+            updateTaskDescription(obj);
+        else
+            showMessage('Error: unknown log type');
+        window.scrollTo(0,document.body.scrollHeight);
     }
 
     function sendMessage(){
@@ -77,7 +128,7 @@ $(document).ready(function(){
 
     sock.onopen = function(){
         showMessage('Connection to server started')
-    }
+    };
 
     // send message from form
     $('#submit').click(function() {
@@ -92,7 +143,7 @@ $(document).ready(function(){
 
     // income message handler
     sock.onmessage = function(event) {
-      updateTaskDescription(event.data);
+        showLog(event.data);
     };
 
     $('#signout').click(function(){

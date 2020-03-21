@@ -106,32 +106,27 @@ class RPCConsumer(RPCBase):
     def get_routing_key(cls):
         return cls._routing_key
 
+    @classmethod
+    def get_queue_name(cls):
+        return f"{cls.get_routing_key()}_queue"
+
     def run(self, input_: RPCConsumerInput):
+        """
+        TODO: think of the RabbitMQ work to be delegated to RPCManager
+        :param input_:
+        :return:
+        """
         self._consumer_input = input_
         params = pika.URLParameters(input_.ampq_url)
         self._connection = pika.BlockingConnection(
             params)
         self._channel = self._connection.channel()
-        self._channel.queue_declare(queue=self.CONSUMER_QUEUE)
-        self._channel.queue_bind(exchange=self.EXCHANGE, queue=self.CONSUMER_QUEUE, routing_key=self.get_routing_key())
+        """durable=False: RabbitMQ WILL lose the queue and messages in it if crashes or quits """
+        self._channel.queue_declare(queue=self.get_queue_name(), durable=False)
+        self._channel.queue_bind(exchange=self.EXCHANGE, queue=self.get_queue_name(),
+                                 routing_key=self.get_routing_key())
         self._channel.basic_qos(prefetch_count=self.PREFETCH_COUNT)
-        self._channel.basic_consume(queue=self.CONSUMER_QUEUE, on_message_callback=self._callback, auto_ack=False)
+        self._channel.basic_consume(queue=self.get_queue_name(), on_message_callback=self._callback, auto_ack=False)
         self._channel.start_consuming()
 
 
-@RPCBase.is_consumer('test_consumer')
-class TestRPCConsumer(RPCConsumer):
-
-    def run_task(self):
-
-        self.publish_progress(0.0, f"Starting the {self._instance_id()}th test RPC consumer")
-        step_count = 1000
-        for step in range(step_count):
-
-            time.sleep(2 * 0.001)
-
-            if (step + 1) % (step_count / 10) == 0:
-                self.publish_progress((step + 1)/float(step_count), "")
-
-        self.publish_completed(f"The {self._instance_id()}th test RPC consumer completed the task")
-        self.notify_task_closed()
