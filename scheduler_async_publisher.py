@@ -6,6 +6,7 @@ import logging
 import json
 import uuid
 import pika
+from PluginEngine import Log
 from PluginEngine.common import require
 from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer
 
@@ -17,12 +18,12 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
 
-class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
+class SchedulerAsyncConsumer(ExampleConsumer):
 
     EXCHANGE = 'message'
-    EXCHANGE_TYPE = 'topic'
+    EXCHANGE_TYPE = 'direct'
     QUEUE = 'reply-to-queue'
-    ROUTING_KEY = 'example.text'
+    ROUTING_KEY = 'feedback'
 
     def __init__(self, ampq_url: str, on_message_callback):
         ExampleConsumer.__init__(self, ampq_url)
@@ -71,6 +72,8 @@ class SchedulerAsyncFeedbackConsumer(ExampleConsumer):
 
 class SchedulerAsyncPublisher(ExamplePublisher):
 
+    REPLY_ROUTING_KEY = 'feedback'
+
     def __init__(self, ampq_url: str, feedback_callback, exchange):
 
         ExamplePublisher.EXCHANGE = exchange
@@ -79,8 +82,6 @@ class SchedulerAsyncPublisher(ExamplePublisher):
 
         self._feedback_consumer = None
         self._feedback_callback = feedback_callback
-
-    REPLY_ROUTING_KEY = 'feedback'
 
     def on_exchange_declareok(self, _unused_frame, userdata):
 
@@ -96,7 +97,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
 
         self._connection = self.connect(custom_ioloop=ioloop)
 
-        self._feedback_consumer = SchedulerAsyncFeedbackConsumer(self._url, self._feedback_callback)
+        self._feedback_consumer = SchedulerAsyncConsumer(self._url, self._feedback_callback)
         self._feedback_consumer.EXCHANGE = self.EXCHANGE
         self._feedback_consumer.EXCHANGE_TYPE = 'direct'
         self._feedback_consumer.ROUTING_KEY = self.REPLY_ROUTING_KEY
@@ -111,7 +112,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
         LOGGER.info('Issuing consumer related RPC commands')
         self.enable_delivery_confirmations()
 
-    def publish_message(self, routing_key: str, corr_id: uuid.UUID, payload: 'json'):
+    def publish_message(self, exchange: str, routing_key: str, corr_id: uuid.UUID, payload: 'json'):
 
         properties = pika.BasicProperties(
             app_id='scheduler_async_publisher',
@@ -120,7 +121,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
             correlation_id=str(corr_id)
         )
 
-        self._channel.basic_publish(self.EXCHANGE, routing_key,
+        self._channel.basic_publish(exchange, routing_key,
                                     payload,
                                     properties)
         self._message_number += 1

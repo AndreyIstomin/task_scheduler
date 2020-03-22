@@ -28,6 +28,18 @@ async def run_task(request):
         return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
 
 
+async def stop_task(request):
+    data = await request.json()
+
+    ok, msg = task_manager.request_stop_task()
+
+    if ok:
+        return web.Response(status=web.HTTPOk.status_code, text=f"The stop request has been sent")
+    else:
+        return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
+
+
+
 async def on_shutdown(app):
     for ws in app['websockets']:
         await ws.close(code=1001, message='Server shutdown')

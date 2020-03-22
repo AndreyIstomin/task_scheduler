@@ -1,8 +1,9 @@
 import uuid
+import time
 from PluginEngine import Log
-from PluginEngine.common import require
+from PluginEngine.common import require, empty_uuid
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
-    RPCStatus, Task, TaskData, RPCErrorCallbackInterface
+    RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
 
 
 class TaskManager:
@@ -29,6 +30,7 @@ class TaskManager:
 
         self._tasks = {}
         self._requests = {}
+        self._close_requests = {}
         self._closed_tasks = []
         self._scenario_provider = scenario_provider
         self._task_logger = task_logger
@@ -39,14 +41,6 @@ class TaskManager:
 
         """
         TODO: deal with payload
-        Parameters
-        ----------
-        task_id
-        payload
-
-        Returns
-        -------
-
         """
 
         task_uuid = uuid.uuid4()
@@ -83,6 +77,24 @@ class TaskManager:
 
         return result
 
+    def request_stop_task(self, task_uuid: uuid.UUID):
+
+        if task_uuid not in self._tasks:
+            return False, f'Task {task_uuid} not found'
+
+        task = self._tasks[task_uuid]
+        require(task.uuid() in self._requests)
+
+        rpc = self._requests[task.uuid()]
+
+        if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
+            return True, f'The task is already closed'
+
+        if rpc.uuid in self._close_requests:
+            return True, f'The task is already requested to close'
+
+        return self.start_close_request(rpc)
+
     def update_task_status(self, response: ResponseObject):
 
         if response.request_id not in self._requests:
@@ -108,6 +120,9 @@ class TaskManager:
         rpc.progress = response.progress
         rpc.update_heartbit_time()
 
+
+        self.process_close_requests(rpc)
+
         if response.status == ResponseStatus.FAILED:
             task.unroll()
             # Here is the place to handle failure
@@ -128,7 +143,6 @@ class TaskManager:
         elif response.status == ResponseStatus.COMPLETED:
 
             rpc.set_completed()
-            self._rpc_manager.close_request(rpc.uuid)
 
             if task.next_step():
 
@@ -154,6 +168,43 @@ class TaskManager:
                 del self._requests[response.request_id]
 
         self._task_logger.update_task(task_data)
+
+    def start_close_request(self, rpc: RPCData):
+
+        require(rpc.status in (RPCStatus.IN_PROGRESS, RPCStatus.WAITING))
+        task = self._tasks[self._requests[rpc.uuid]]
+
+        req = self._close_requests[rpc.uuid] = CloseRequest(task_uuid=self._requests[rpc.uuid], task_name=task.name())
+
+        if rpc.status == RPCStatus.WAITING:
+            ok, msg = True, f'The task is waiting'
+        else:
+            ok, msg = self._rpc_manager.close_request(rpc.uuid)
+            require(ok)
+            req.set_in_progress()
+
+        self._task_logger.update_close_request(req)
+        return ok, msg
+
+    def process_close_requests(self, rpc: RPCData):
+
+        if rpc.uuid not in self._close_requests:
+            return
+
+        req = self._close_requests[rpc.uuid]
+
+        if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
+            req.set_completed()
+            del self._close_requests[rpc.uuid]
+
+        elif rpc.status == RPCStatus.IN_PROGRESS:
+            if not req.in_progres():
+
+                ok, msg = self._rpc_manager.close_request(rpc.uuid)
+                require(ok)
+                req.set_in_progress()
+
+        self._task_logger.update_close_request(req)
 
     def run_in_external_ioloop(self, io_loop):
 

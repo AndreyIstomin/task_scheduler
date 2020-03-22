@@ -11,8 +11,10 @@ class RPCBase:
     class ConsumerAlreadyRegisteredException(Exception):
         pass
 
-    STOP_REQUEST_ROUTING_KEY = 'stop_request'
-    EXCHANGE = 'rpc_manager'
+    EXCHANGE = 'rpc_manager_exchange'
+    CMD_EXCHANGE = 'rpc_manager_cmd_exchange'
+    CMD_ROUTING_KEY = 'rpc_manager_cmd'
+
     PREFETCH_COUNT = 1
 
     _known_consumers = {}
@@ -37,7 +39,6 @@ class RPCBase:
     @classmethod
     def check_scenario(cls, scenario: Scenario) -> (bool, str):
 
-        print(cls._known_consumers)
         error_msg = ','.join(request for request in scenario if request not in cls._known_consumers)
 
         ok = error_msg == ''

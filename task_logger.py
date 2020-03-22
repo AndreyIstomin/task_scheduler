@@ -1,7 +1,8 @@
 import asyncio
 import json
 from PluginEngine import LogLevel
-from backend.task_scheduler_service import TaskData, RPCData, RPCStatus
+from PluginEngine.common import empty_uuid
+from backend.task_scheduler_service import TaskData, RPCData, RPCStatus, CloseRequest
 
 
 class EventType:
@@ -37,13 +38,28 @@ def message_descriptor(msg: str, level: LogLevel):
     }
 
 
+def close_request_descriptor(req: CloseRequest):
+
+    d = RPCData(empty_uuid, 'Close request', req.progress, req.status, req.message)
+
+    return {
+        'type': EventType.TASK,
+        'uuid': CloseRequest.uuid,
+        'name': f'Close task {CloseRequest.task_uuid}',
+        'steps': [{d}]
+    }
+
+
 class TaskLogger:
 
     def __init__(self, app: 'aiohttp application'):
         self._app = app
 
+    def update_close_request(self, req: CloseRequest):
+
+        self._send_json(close_request_descriptor(req))
+
     def new_task(self, task_data: TaskData):
-        msg = f'new task: {task_data.task.name()}'
         self._send_json(task_descriptor(task_data))
 
     def update_task(self, task_data: TaskData):

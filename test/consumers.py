@@ -32,12 +32,12 @@ class TestRPCConsumer(RPCConsumer):
 
 
 @RPCBase.is_consumer('consumer_A')
-class TestConsumerA(TestRPCConsumer, step_time_ms=7):
+class TestConsumerA(TestRPCConsumer, step_time_ms=1):
     pass
 
 
 @RPCBase.is_consumer('consumer_B')
-class TestConsumerB(TestRPCConsumer, step_time_ms=10):
+class TestConsumerB(TestRPCConsumer, step_time_ms=2):
     pass
 
 

@@ -1,7 +1,7 @@
 import time
 import uuid
 from PluginEngine.common import require
-from backend.task_scheduler_service import ScenarioProvider, RPCBase
+from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus
 
 
 class Task:
@@ -61,7 +61,6 @@ class Task:
         require(self._valid)
         return True
 
-
     def name(self):
         if self._scenario:
             return self._scenario.name()
@@ -72,3 +71,28 @@ class TaskData:
     def __init__(self):
         self.task = None
         self.requests = []
+
+
+class CloseRequest:
+
+    def __init__(self, task_uuid: uuid.UUID, task_name: str):
+        self.uuid = uuid.uuid4()
+        self.time = time.time()
+        self.task_name = task_name
+        self.task_uuid = task_uuid
+        self.progress = 0.0
+        self.message = 'waiting'
+        self.status = RPCStatus.WAITING
+
+    def set_in_progress(self):
+        require(self.status == RPCStatus.WAITING)
+        self.status = RPCStatus.IN_PROGRESS
+        self.message = 'in progress'
+        self.time = time.time()
+
+    def in_progress(self):
+        return self.status == RPCStatus.IN_PROGRESS
+
+    def set_completed(self):
+        self.status = RPCStatus.COMPLETED
+

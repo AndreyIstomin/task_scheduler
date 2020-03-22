@@ -2,10 +2,11 @@ import uuid
 import time
 import json
 import jsonschema
+import asyncio
 from multiprocessing import Process, Value
 from PluginEngine import Log
 from PluginEngine.common import require, empty_uuid
-from backend.task_scheduler_service import SchedulerAsyncPublisher, RPCConsumerInput
+from backend.task_scheduler_service import SchedulerAsyncPublisher, SchedulerAsyncConsumer, RPCConsumerInput
 from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
 from backend.task_scheduler_service.rpc_common import RPCBase, RPCData, RPCStatus, RPCErrorCallbackInterface
 
@@ -50,6 +51,7 @@ class RPCManager(RPCBase):
 
         # Server variables
         self._consumers = {}
+        self._stop_consumer = None
 
     #  Server interface
     def add_consumer(self, routing_key: str, instance_count: int):
@@ -74,20 +76,25 @@ class RPCManager(RPCBase):
 
         json_payload = json.dumps(d)
         request_id = uuid.uuid4()
-        self._publisher.publish_message(routing_key=routing_key, corr_id=request_id, payload=json_payload)
+        self._publisher.publish_message(exchange=self.EXCHANGE, routing_key=routing_key, corr_id=request_id, payload=json_payload)
         self._requests[request_id] = RPCManager.Request()
 
         return RPCData(request_id, routing_key, 0.0, RPCStatus.WAITING, 'The request has been sent')
 
     def close_request(self, request_id: uuid.UUID) -> (bool, str):
+        require(self._regime == RPCManager.CLIENT)
+        require(self._publisher)
+        require(self._publisher.running())
 
         if request_id in self._requests:
             """
             TODO: here we need to process correctly  confirmation, don't we?
             """
-            # self._publisher.publish_message(routing_key=RPCManager.STOP_REQUEST_ROUTING_KEY, corr_id=request_id,
-            #                                 payload=None)
-            del self._requests[request_id]
+            self._publisher.publish_message(exchange=self.EXCHANGE, routing_key=RPCManager.STOP_REQUEST_ROUTING_KEY,
+                                            corr_id=request_id, payload=None)
+            # del self._requests[request_id]
+
+            # HERE WE ARE
             return True, 'Ok'
 
         else:
@@ -128,10 +135,29 @@ class RPCManager(RPCBase):
                 processes.append(process)
                 process.start()
 
-        for process in processes:
-            process.join()
+        #  Starting command queue
+        self._stop_consumer = SchedulerAsyncConsumer(self._ampq_url, self._on_cmd_message)
+        self._stop_consumer.EXCHANGE = self.CMD_EXCHANGE
+        self._stop_consumer.EXCHANGE_TYPE = 'fanout'
+        self._stop_consumer.QUEUE = ''
+        self._stop_consumer.ROUTING_KEY = self.CMD_ROUTING_KEY
+        loop = asyncio.get_event_loop()
+        self._stop_consumer.run_in_external_ioloop(loop)
+
+        try:
+            loop.run_forever()
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+            for process in processes:
+                process.join()
+        ####
 
         return True, 'Ok'
+
+    def _on_cmd_message(self, payload: bytes):
+
+        Log.info(f'cmd message: {payload}')
 
     def _run_server_async(self, io_loop) -> (bool, str):
 
@@ -163,7 +189,7 @@ class RPCManager(RPCBase):
 
         if response.request_id not in self._requests:
             Log.error(f"unknown RPC request {response.request_id}")
-            self._ext_reply_callback.on_unknown_request_id()
+            self._ext_error_callback.on_unknown_request_id()
 
         if response.status is ResponseStatus.IN_PROGRESS:
             pass
