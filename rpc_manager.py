@@ -28,7 +28,7 @@ class RPCManager(RPCBase):
         def __init__(self):
             pass
 
-    def __init__(self, regime, ampq_url: str, heart_bit_timeout: 'seconds', reply_callback=None,
+    def __init__(self, regime, amqp_url: str, heart_bit_timeout: 'seconds', reply_callback=None,
                  error_callback=None):
 
         require(regime in [RPCManager.SERVER, RPCManager.CLIENT])
@@ -41,7 +41,7 @@ class RPCManager(RPCBase):
         self._running = False
         self._heart_bit_timeout = heart_bit_timeout
         self._io_loop = None
-        self._ampq_url = ampq_url
+        self._amqp_url = amqp_url
 
         # Client variables
         self._requests = {}
@@ -129,14 +129,14 @@ class RPCManager(RPCBase):
 
                 process = Process(target=RPCManager._run_consumer,
                                   args=(self._known_consumers[_type],
-                                        RPCConsumerInput(self._ampq_url, self._heart_bit_timeout, i))
+                                        RPCConsumerInput(self._amqp_url, self._heart_bit_timeout, i))
                                   )
                 consumer_data.processes.append(process)
                 processes.append(process)
                 process.start()
 
         #  Starting command queue
-        self._stop_consumer = SchedulerAsyncConsumer(self._ampq_url, self._on_cmd_message)
+        self._stop_consumer = SchedulerAsyncConsumer(self._amqp_url, self._on_cmd_message)
         self._stop_consumer.EXCHANGE = self.CMD_EXCHANGE
         self._stop_consumer.EXCHANGE_TYPE = 'fanout'
         self._stop_consumer.QUEUE = ''
@@ -165,7 +165,7 @@ class RPCManager(RPCBase):
 
     def _run_client(self) -> (bool, str):
 
-        self._publisher = SchedulerAsyncPublisher(self._ampq_url, self._reply_callback, self.EXCHANGE)
+        self._publisher = SchedulerAsyncPublisher(self._amqp_url, self._reply_callback, self.EXCHANGE)
 
         self._publisher.run_in_external_ioloop(self._io_loop)
 

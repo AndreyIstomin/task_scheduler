@@ -26,7 +26,7 @@ class TaskManager:
 
             self.__logger.error('Unknown RPC request id')
 
-    def __init__(self, ampq_url: str, scenario_provider: ScenarioProvider, task_logger: TaskLogger):
+    def __init__(self, amqp_url: str, scenario_provider: ScenarioProvider, task_logger: TaskLogger):
 
         self._tasks = {}
         self._requests = {}
@@ -35,7 +35,7 @@ class TaskManager:
         self._scenario_provider = scenario_provider
         self._task_logger = task_logger
         self._rpc_manager = None
-        self._ampq_url = ampq_url
+        self._amqp_url = amqp_url
 
     def start_task(self, task_id: int, payload: dict) -> (uuid.UUID, str):
 
@@ -205,7 +205,7 @@ class TaskManager:
 
     def run_in_external_ioloop(self, io_loop):
 
-        self._rpc_manager = RPCManager(RPCManager.CLIENT, ampq_url=self._ampq_url,
+        self._rpc_manager = RPCManager(RPCManager.CLIENT, amqp_url=self._amqp_url,
                                        heart_bit_timeout=5,
                                        reply_callback=self.update_task_status,
                                        error_callback=self.ErrorCallbackHandler(self._task_logger))

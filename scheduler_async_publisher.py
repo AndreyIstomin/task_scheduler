@@ -25,8 +25,8 @@ class SchedulerAsyncConsumer(ExampleConsumer):
     QUEUE = 'reply-to-queue'
     ROUTING_KEY = 'feedback'
 
-    def __init__(self, ampq_url: str, on_message_callback):
-        ExampleConsumer.__init__(self, ampq_url)
+    def __init__(self, amqp_url: str, on_message_callback):
+        ExampleConsumer.__init__(self, amqp_url)
         self._on_message_callback = on_message_callback
 
     def on_message(self, channel, basic_deliver, properties, body):
@@ -74,11 +74,11 @@ class SchedulerAsyncPublisher(ExamplePublisher):
 
     REPLY_ROUTING_KEY = 'feedback'
 
-    def __init__(self, ampq_url: str, feedback_callback, exchange):
+    def __init__(self, amqp_url: str, feedback_callback, exchange):
 
         ExamplePublisher.EXCHANGE = exchange
         ExamplePublisher.EXCHANGE_TYPE = 'direct'
-        ExamplePublisher.__init__(self, ampq_url)
+        ExamplePublisher.__init__(self, amqp_url)
 
         self._feedback_consumer = None
         self._feedback_callback = feedback_callback

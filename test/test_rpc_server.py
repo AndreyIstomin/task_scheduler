@@ -5,7 +5,7 @@ from backend.task_scheduler_service import RPCManager, RPCConsumer, ResponseObje
 
 def test_rpc_server():
 
-    manager = RPCManager(regime=RPCManager.SERVER, ampq_url=SERVICE_CONFIG['task_scheduler_service']['ampq_url'],
+    manager = RPCManager(regime=RPCManager.SERVER, amqp_url=SERVICE_CONFIG['task_scheduler_service']['amqp_url'],
                          heart_bit_timeout=5)
 
     manager.add_consumer('consumer_A', 5)

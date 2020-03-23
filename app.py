@@ -102,7 +102,7 @@ if __name__ == '__main__':
     logger = TaskLogger(the_app)
 
     scenario_provider = ScenarioProvider()
-    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['ampq_url'], scenario_provider, logger)
+    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider, logger)
     task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
     web.run_app(the_app,
                 host=SERVICE_CONFIG['task_scheduler_service']['IP'],

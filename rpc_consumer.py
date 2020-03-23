@@ -9,9 +9,9 @@ from backend.task_scheduler_service.rpc_common import RPCBase
 
 class RPCConsumerInput:
 
-    def __init__(self, ampq_url: str, heartbit_timeout: 'seconds', instance_id: int):
+    def __init__(self, amqp_url: str, heartbit_timeout: 'seconds', instance_id: int):
 
-        self.ampq_url = ampq_url
+        self.amqp_url = amqp_url
         self.heartbit_timeout = heartbit_timeout
         self.instance_id = instance_id
 
@@ -136,7 +136,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         :return:
         """
         self._consumer_input = input_
-        params = pika.URLParameters(input_.ampq_url)
+        params = pika.URLParameters(input_.amqp_url)
         self._connection = pika.BlockingConnection(
             params)
         self._channel = self._connection.channel()
