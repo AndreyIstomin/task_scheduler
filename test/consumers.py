@@ -62,10 +62,10 @@ class RPCRoadGenerator(RPCConsumer):
         self._generator = None
 
     def run_task(self):
-		#  self.notify_task_began() <-- TODO (idempotent)
+        #  self.notify_task_began() <-- TODO (idempotent)
         self._generator = RoadGenerator(create_client_notifier(self._payload['username'], RoadGenerator.process_name()),
-                                      create_db_handler(), self._payload)
+                                        create_db_handler(), self._payload)
         self._generator.set_rpc_consumer(self)
         self._generator.run_safely()
-		self.notify_task_closed()
+        self.notify_task_closed()
 
