@@ -120,7 +120,6 @@ class TaskManager:
         rpc.progress = response.progress
         rpc.update_heartbit_time()
 
-
         self.process_close_requests(rpc)
 
         if response.status == ResponseStatus.FAILED:
@@ -131,8 +130,6 @@ class TaskManager:
             #
             del self._tasks[task_uuid]
             del self._requests[response.request_id]
-
-            self._rpc_manager.close_request(rpc.uuid)
 
         elif response.status == ResponseStatus.IN_PROGRESS:
             #  Here is the place to log progress

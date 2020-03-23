@@ -2,6 +2,7 @@ import time
 import json
 import pika
 from PluginEngine import Log
+from LandscapeEditor.backend import RPCConsumerInterface
 from backend.task_scheduler_service import ResponseObject, ResponseStatus
 from backend.task_scheduler_service.rpc_common import RPCBase
 
@@ -15,7 +16,7 @@ class RPCConsumerInput:
         self.instance_id = instance_id
 
 
-class RPCConsumer(RPCBase):
+class RPCConsumer(RPCBase, RPCConsumerInterface):
 
     _routing_key = None
 
@@ -34,9 +35,14 @@ class RPCConsumer(RPCBase):
         self._payload = None
 
         self._task_is_closed = False
+        self._progress = 0.0
+        self._message = ""
 
-    def _instance_id(self)->int:
+    def instance_id(self)->int:
         return self._consumer_input.instance_id
+
+    def payload(self) -> dict:
+        return self._payload
 
     def _publish_response(self, response: ResponseObject):
 
@@ -52,10 +58,21 @@ class RPCConsumer(RPCBase):
 
         self._publish_response(response)
 
-    def publish_progress(self, progress: '[0.0, 1.0]', message=""):
+    def publish_progress(self, progress: '[0.0, 1.0]', message=None):
 
+        if message is not None:
+            self._message = message
+        self._progress = progress
         response = ResponseObject(request_id=self._properties.correlation_id,
-                                  status=ResponseStatus.IN_PROGRESS, progress=progress, message=message)
+                                  status=ResponseStatus.IN_PROGRESS, progress=self._progress, message=self._message)
+
+        self._publish_response(response)
+
+    def publish_message(self, message: str):
+
+        self._message = message
+        response = ResponseObject(request_id=self._properties.correlation_id,
+                                  status=ResponseStatus.IN_PROGRESS, progress=self._progress, message=self._message)
 
         self._publish_response(response)
 
@@ -74,10 +91,12 @@ class RPCConsumer(RPCBase):
 
     def _reset_state(self):
         self._task_is_closed = False
+        self._progress = 0.0
+        self._message = ""
 
     def _callback(self, ch, method, properties, body):
 
-        Log.info(f"The {self._instance_id()}th test RPC consumer got task")
+        Log.info(f"The {self.instance_id()}th test RPC consumer got task")
         self._reset_state()
 
         #  First of all update vars
@@ -128,5 +147,4 @@ class RPCConsumer(RPCBase):
         self._channel.basic_qos(prefetch_count=self.PREFETCH_COUNT)
         self._channel.basic_consume(queue=self.get_queue_name(), on_message_callback=self._callback, auto_ack=False)
         self._channel.start_consuming()
-
 

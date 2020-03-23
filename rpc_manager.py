@@ -90,7 +90,7 @@ class RPCManager(RPCBase):
             """
             TODO: here we need to process correctly  confirmation, don't we?
             """
-            self._publisher.publish_message(exchange=self.EXCHANGE, routing_key=RPCManager.STOP_REQUEST_ROUTING_KEY,
+            self._publisher.publish_message(exchange=self.EXCHANGE, routing_key=RPCBase.CMD_ROUTING_KEY,
                                             corr_id=request_id, payload=None)
             # del self._requests[request_id]
 

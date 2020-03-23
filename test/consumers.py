@@ -1,9 +1,11 @@
 import pika
 import time
 from backend.task_scheduler_service import RPCBase, RPCConsumer, ResponseObject
+from backend.generator_service import create_db_handler, create_client_notifier
+from LandscapeEditor.road import RoadGenerator
 
 
-__all__ = ["TestRPCConsumer", "TestConsumerA", "TestConsumerB", "TestConsumerC"]
+__all__ = ["TestRPCConsumer", "TestConsumerA", "TestConsumerB", "TestConsumerC", "RPCRoadGenerator"]
 
 
 @RPCBase.is_consumer('test_consumer')
@@ -17,7 +19,7 @@ class TestRPCConsumer(RPCConsumer):
 
     def run_task(self):
 
-        self.publish_progress(0.0, f"Starting the {self._instance_id()}th test RPC consumer")
+        self.publish_progress(0.0, f"Starting the {self.instance_id()}th test RPC consumer")
         step_count = 1000
         for step in range(step_count):
 
@@ -27,7 +29,7 @@ class TestRPCConsumer(RPCConsumer):
                 pr = (step + 1)/float(step_count)
                 self.publish_progress(pr, f"Current progress {int(pr * 100.0)}%")
 
-        self.publish_completed(f"The {self._instance_id()}th {self.get_routing_key()} completed the task")
+        self.publish_completed(f"The {self.instance_id()}th {self.get_routing_key()} completed the task")
         self.notify_task_closed()
 
 
@@ -50,3 +52,20 @@ class TestConsumerC(TestRPCConsumer):
                                routing_key=self._properties.reply_to,
                                properties=pika.BasicProperties(correlation_id=self._properties.correlation_id),
                                body=b'Hello')
+
+
+@RPCBase.is_consumer('road_generator')
+class RPCRoadGenerator(RPCConsumer):
+
+    def __init__(self):
+        RPCConsumer.__init__(self)
+        self._generator = None
+
+    def run_task(self):
+		#  self.notify_task_began() <-- TODO (idempotent)
+        self._generator = RoadGenerator(create_client_notifier(self._payload['username'], RoadGenerator.process_name()),
+                                      create_db_handler(), self._payload)
+        self._generator.set_rpc_consumer(self)
+        self._generator.run_safely()
+		self.notify_task_closed()
+
