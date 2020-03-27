@@ -3,7 +3,7 @@ import time
 from PluginEngine import Log
 from PluginEngine.common import require, empty_uuid
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
-    RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
+    RPCStatus, TaskStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
 
 
 class TaskManager:
@@ -56,6 +56,7 @@ class TaskManager:
                 task_data = self._tasks[task_uuid] = TaskData()
                 task_data.task = task
                 task_data.requests.append(rpc)
+                task_data.status = TaskStatus.WAITING
                 self._requests[rpc.uuid] = task.uuid()
                 result = task_uuid, 'The task has been created'
             else:
@@ -64,6 +65,7 @@ class TaskManager:
                 task_data = TaskData()
                 task_data.task = task
                 task_data.requests = [rpc]
+                task_data.status = TaskStatus.FAILED
 
                 self._closed_tasks = (task_uuid, task_data)
                 #
@@ -123,6 +125,7 @@ class TaskManager:
         self.process_close_requests(rpc)
 
         if response.status == ResponseStatus.FAILED:
+            task_data.status = TaskStatus.FAILED
             task.unroll()
             # Here is the place to handle failure
             rpc.set_failed()
@@ -132,10 +135,9 @@ class TaskManager:
             del self._requests[response.request_id]
 
         elif response.status == ResponseStatus.IN_PROGRESS:
-            #  Here is the place to log progress
+            task_data.status = TaskStatus.IN_PROGRESS
             rpc.progress = response.progress
             rpc.message = response.message
-            #
 
         elif response.status == ResponseStatus.COMPLETED:
 
@@ -145,10 +147,12 @@ class TaskManager:
 
                 rpc = self._rpc_manager.put_request(task.current_request(), task.payload)
                 if rpc.status == RPCStatus.WAITING:
+                    task_data.status = TaskStatus.IN_PROGRESS
                     task_data.requests.append(rpc)
                     del self._requests[response.request_id]
                     self._requests[rpc.uuid] = task_data.task.uuid()
                 else:
+                    task_data.status = TaskStatus.FAILED
                     task.unroll()
                     # Here the place to log put request failed
                     self._closed_tasks = (task_uuid, task_data)
@@ -157,6 +161,7 @@ class TaskManager:
                     self._rpc_manager.close_request(rpc.uuid)
 
             else:
+                task_data.status = TaskStatus.COMPLETED
                 task.close()
                 #  Here is the place to log task completeness
                 self._closed_tasks = (task_uuid, task_data)

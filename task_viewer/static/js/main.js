@@ -1,4 +1,4 @@
-// https://habr.com/ru/post/200866/
+// https://github.com/steelkiwi/aiohttp_test_chat
 
 const TaskStatus = {"INACTIVE": 0, "WAITING": 1, "IN_PROGRESS": 2, "COMPLETED": 3, "FAILED": 4};
 Object.freeze(TaskStatus);
@@ -12,6 +12,17 @@ Object.freeze(LogLevel);
 const LogLevelToBSClass = ["text-muted", "text-muted", "text", "text-warning", "text-danger", "text-success"]
 
 const RPCStatusToText = ["inactive", "waiting", "in progress", "completed", "failed"]
+
+/**
+ * @param {String} HTML representing a single element
+ * @return {Element}
+ */
+function htmlToElement(html) {
+    var template = document.createElement('template');
+    html = html.trim(); // Never return a text node of whitespace as the result
+    template.innerHTML = html;
+    return template.content.firstChild;
+}
 
 $(document).ready(function(){
     try{
@@ -46,13 +57,9 @@ $(document).ready(function(){
         let subTaskBlock = document.getElementById(obj.uuid);
         if(!subTaskBlock)
         {
-            subTaskBlock = document.createElement('a');
-            subTaskBlock.setAttribute('id', obj.uuid);
-            subTaskBlock.setAttribute('class','list-group-item');
-            subTaskBlock.setAttribute('href', '#');
+            subTaskBlock = htmlToElement(`<a id="${obj.uuid}" class="list-group-item" href="#"></a>`);
             subTaskBlock.innerHTML = `<h5 class="list-group-item-heading"> ${obj.name}
 <small class="message">${obj.msg}</small><span class="badge">${RPCStatusToText[obj.status]}</span></h5>`;
-//            subTaskBlock.innerHTML = `${obj.name}: <small class="message">${obj.msg}</small><span class="badge">${RPCStatusToText[obj.status]}</span>`
             taskBlock.append(subTaskBlock);
         }
 
@@ -68,14 +75,13 @@ $(document).ready(function(){
             date = new Date(),
             options = {hour12: false};
         if(!taskBlock) {
-            taskBlock = document.createElement('div');
-            taskBlock.setAttribute('id', obj.uuid);
-            taskBlock.setAttribute('class', 'task-block')
+
+            taskBlock = htmlToElement(`<div id="${obj.uuid}" class="task-block"></div>`);
             taskBlock.append(prepareMsgElement(obj.name, LogLevel.INFO));
-            taskBlock.append(document.createElement('div', {'class': 'list-group'}));
-            taskBlock.append(document.createElement('p'));
+            taskBlock.append(htmlToElement('<div class="list-group"></div>'));
             parent.append(taskBlock)
         }
+        updateCloseBtn(taskBlock, obj);
         let i = 0;
         for(;i < obj.steps.length; i++){
             updateSubTask(taskBlock.childNodes[1], obj.steps[i]);
@@ -89,6 +95,20 @@ $(document).ready(function(){
         obj.setAttribute('class', LogLevelToBSClass[level]);
         obj.innerText = `[${date.toLocaleTimeString('en-US', opts)}] ${msg}`;
         return obj;
+    }
+
+    function updateCloseBtn(taskBlock, obj){
+        let closeBtn = document.getElementById(`close_${obj.uuid}`);
+        if(obj.status == TaskStatus.IN_PROGRESS)
+        {
+            if(!closeBtn) {
+                taskBlock.children[0].append(
+                    htmlToElement(`<input class='btn btn-default btn-xs' type='submit' id='close_${obj.uuid}' value='Close'>`))
+            }
+        }
+        else if(closeBtn) {
+            closeBtn.remove();
+        }
     }
 
     // show message in div#subscribe

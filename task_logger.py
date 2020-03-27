@@ -26,6 +26,7 @@ def task_descriptor(task_data: TaskData):
         'type': EventType.TASK,
         'uuid': str(task_data.task.uuid()),
         'name': task_data.task.name(),
+        'status': task_data.status,
         'steps': list(map(step_descriptor, task_data.requests))
     }
 
@@ -44,8 +45,8 @@ def close_request_descriptor(req: CloseRequest):
 
     return {
         'type': EventType.TASK,
-        'uuid': CloseRequest.uuid,
-        'name': f'Close task {CloseRequest.task_uuid}',
+        'uuid': req.uuid,
+        'name': f'Close task {req.task_name}, ({req.task_uuid})',
         'steps': [{d}]
     }
 

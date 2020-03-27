@@ -4,6 +4,9 @@ from PluginEngine.common import require
 from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus
 
 
+TaskStatus = RPCStatus
+
+
 class Task:
 
     def __init__(self, task_uuid: uuid.UUID, task_id: int, payload: dict):
@@ -71,6 +74,7 @@ class TaskData:
     def __init__(self):
         self.task = None
         self.requests = []
+        self.status = TaskStatus.INACTIVE
 
 
 class CloseRequest:
