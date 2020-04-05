@@ -1,8 +1,11 @@
 import uuid
 import json
 import jsonschema
-
+from multiprocessing import Array
 from backend.task_scheduler_service.schemas import RESPONSE_SCHEMA
+
+
+__all__ = ["ResponseStatus", "ResponseObject", "array_to_uuid", "uuid_to_array"]
 
 
 class ResponseStatus:
@@ -38,3 +41,17 @@ class ResponseObject:
         d = json.loads(json_data)
         jsonschema.validate(d, RESPONSE_SCHEMA)
         return cls(**d)
+
+
+def array_to_uuid(arr: Array):
+
+    with arr.get_lock():
+	    return uuid.UUID(bytes=bytes(arr[:]))
+
+
+def uuid_to_array(arr: Array, _uuid: uuid.UUID):
+
+    with arr.get_lock():
+        arr[:] = _uuid.bytes
+
+    return arr

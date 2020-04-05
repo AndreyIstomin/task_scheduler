@@ -49,7 +49,7 @@ class TaskManager:
         if ok:
 
             task.start()
-            rpc = self._rpc_manager.put_request(task.current_request(), task.payload)
+            rpc = self._rpc_manager.request(task.current_request(), task.payload)
 
             if rpc.status == RPCStatus.WAITING:
 
@@ -84,18 +84,24 @@ class TaskManager:
         if task_uuid not in self._tasks:
             return False, f'Task {task_uuid} not found'
 
-        task = self._tasks[task_uuid]
-        require(task.uuid() in self._requests)
+        task_data = self._tasks[task_uuid]
 
-        rpc = self._requests[task.uuid()]
+        not_found = True
 
-        if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
-            return True, f'The task is already closed'
+        for rpc in task_data.requests:
 
-        if rpc.uuid in self._close_requests:
-            return True, f'The task is already requested to close'
+            if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
+                pass
 
-        return self.start_close_request(rpc)
+            if rpc.uuid in self._close_requests:
+                pass
+
+            ok, msg = self.start_close_request(rpc)
+            if not ok:
+                return ok, msg
+            not_found = False
+
+        return True, 'Task is already closed' if not_found else 'Task close has been requested'
 
     def update_task_status(self, response: ResponseObject):
 
@@ -145,7 +151,7 @@ class TaskManager:
 
             if task.next_step():
 
-                rpc = self._rpc_manager.put_request(task.current_request(), task.payload)
+                rpc = self._rpc_manager.request(task.current_request(), task.payload)
                 if rpc.status == RPCStatus.WAITING:
                     task_data.status = TaskStatus.IN_PROGRESS
                     task_data.requests.append(rpc)
@@ -158,7 +164,6 @@ class TaskManager:
                     self._closed_tasks = (task_uuid, task_data)
                     #
                     del self._tasks[task_uuid]
-                    self._rpc_manager.close_request(rpc.uuid)
 
             else:
                 task_data.status = TaskStatus.COMPLETED
@@ -174,6 +179,7 @@ class TaskManager:
     def start_close_request(self, rpc: RPCData):
 
         require(rpc.status in (RPCStatus.IN_PROGRESS, RPCStatus.WAITING))
+        require(rpc.uuid in self._requests)
         task = self._tasks[self._requests[rpc.uuid]]
 
         req = self._close_requests[rpc.uuid] = CloseRequest(task_uuid=self._requests[rpc.uuid], task_name=task.name())

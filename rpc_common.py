@@ -1,9 +1,13 @@
 import uuid
 import time
+import json
+import jsonschema
+from enum import Enum
 from PluginEngine import Log
 from PluginEngine.common import require
 from backend.task_scheduler_service import Scenario
 from backend.task_scheduler_service.common import ResponseObject
+from backend.task_scheduler_service.schemas import CMD_MESSAGE_SCHEMA
 
 
 class RPCBase:
@@ -13,6 +17,7 @@ class RPCBase:
 
     EXCHANGE = 'rpc_manager_exchange'
     CMD_EXCHANGE = 'rpc_manager_cmd_exchange'
+    CMD_QUEUE = 'rpc_manager_cmd_queue'
     CMD_ROUTING_KEY = 'rpc_manager_cmd'
 
     PREFETCH_COUNT = 1
@@ -25,7 +30,7 @@ class RPCBase:
 
         def register(class_):
             if routing_key not in cls._known_consumers:
-                Log.info(f'{routing_key} has been registered as RPC consumer')
+                Log.debug(f'{routing_key} has been registered as RPC consumer')
                 class_._routing_key = routing_key
                 cls._known_consumers[class_.get_routing_key()] = class_
 
@@ -37,7 +42,7 @@ class RPCBase:
         return register
 
     @classmethod
-    def check_scenario(cls, scenario: Scenario) -> (bool, str):
+    def check_scenario(cls, scenario: 'Scenario') -> (bool, str):
 
         error_msg = ','.join(request for request in scenario if request not in cls._known_consumers)
 
@@ -95,3 +100,31 @@ class RPCData:
 
     def set_failed(self):
         self.status = RPCStatus.FAILED
+
+
+class CMDType(Enum):
+
+    CLOSE_TASK = 0
+
+
+class RPCManagerCMD:
+
+    def __init__(self, cmd_type: int, request_id: str):
+
+        self.type = cmd_type
+        self.request_id = uuid.UUID(request_id)
+
+    def to_json(self):
+
+        return json.dumps({
+            'cmd': str(self.type),
+            'request_id': self.request_id})
+
+    @classmethod
+    def from_json(cls, json_data: bytes):
+
+        d = json.loads(json_data)
+        jsonschema.validate(d, CMD_MESSAGE_SCHEMA)
+        if not d['cmd'] in CMDType:
+            raise jsonschema.ValidationError(f'incorrect CMD type: {d["cmd"]}')
+        return cls(**d)

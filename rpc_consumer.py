@@ -1,10 +1,12 @@
 import time
 import json
 import pika
-from PluginEngine import Log
-from LandscapeEditor.backend import RPCConsumerInterface
+from PluginEngine import Log, ProgressInterface
+from PluginEngine.common import require
+from LandscapeEditor.backend import RPCConsumerInterface, GeneratorInterface
 from backend.task_scheduler_service import ResponseObject, ResponseStatus
 from backend.task_scheduler_service.rpc_common import RPCBase
+from backend.generator_service import create_client_notifier, create_db_handler
 
 
 class RPCConsumerInput:
@@ -16,11 +18,44 @@ class RPCConsumerInput:
         self.instance_id = instance_id
 
 
+class RPCConsumerExitCmd(Exception):
+    pass
+
+
+class RPCProgressHandler(ProgressInterface):
+
+    def __init__(self, *args, **kwargs):
+        ProgressInterface.__init__(self, *args, **kwargs)
+
+        self._steps_done = 0
+
+    def update(self, tasks_completed):
+
+            if not self._total_count:
+                self._progress = 100
+                return self._progress
+
+            self._task_completed += tasks_completed
+
+            if self._task_completed < self._total_count:
+                self._progress = int(self._task_completed / float(self._total_count) * 100.0)
+            else:
+                self._progress = 100
+
+            steps_done = int(self._progress / self._step)
+
+            if steps_done != self._steps_done:
+                self._steps_done = steps_done
+                self._logger.publish_progress(self._progress * 0.01, self._name)
+
+            return self._progress
+
+
 class RPCConsumer(RPCBase, RPCConsumerInterface):
 
     _routing_key = None
 
-    def run_task(self):
+    def _run_task(self):
 
         raise NotImplementedError()
 
@@ -34,29 +69,21 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._properties = None
         self._payload = None
 
+        self._task_is_opened = False
         self._task_is_closed = False
         self._progress = 0.0
+        self._failed = False
         self._message = ""
+        self._complete_message = None
+        self._err_message = None
 
-    def instance_id(self)->int:
+#  RPCConsumerInterface ################################################################################################
+
+    def instance_id(self) -> int:
         return self._consumer_input.instance_id
 
     def payload(self) -> dict:
         return self._payload
-
-    def _publish_response(self, response: ResponseObject):
-
-        self._ch.basic_publish(exchange=self.EXCHANGE,
-                         routing_key=self._properties.reply_to,
-                         properties=pika.BasicProperties(correlation_id=self._properties.correlation_id),
-                         body=response.to_json())
-
-    def publish_error(self, err_message: str):
-
-        response = ResponseObject(request_id=self._properties.correlation_id,
-                                  status=ResponseStatus.FAILED, progress=0.0, message=err_message)
-
-        self._publish_response(response)
 
     def publish_progress(self, progress: '[0.0, 1.0]', message=None):
 
@@ -76,23 +103,72 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
         self._publish_response(response)
 
-    def publish_completed(self, message):
+    def create_progress(self, step_count: int, msg: str, step: int) -> ProgressInterface:
+        """
+
+        :param step_count:
+        :param msg:
+        :param step:
+        :return:
+        """
+        return RPCProgressHandler(self, step_count, msg, step)
+
+    def notify_task_completed(self, message: str):
+
+        self._complete_message = message
+
+    def notify_task_failed(self, err_message: str):
+
+        self._failed = True
+        self._err_message = err_message
+
+#  Protected ###########################################################################################################
+
+    def _publish_response(self, response: ResponseObject):
+
+        self._ch.basic_publish(exchange=self.EXCHANGE,
+                         routing_key=self._properties.reply_to,
+                         properties=pika.BasicProperties(correlation_id=self._properties.correlation_id),
+                         body=response.to_json())
+
+    def _publish_completed(self):
 
         response = ResponseObject(request_id=self._properties.correlation_id,
-                                  status=ResponseStatus.COMPLETED, progress=1.0, message=message)
+                                  status=ResponseStatus.COMPLETED, progress=1.0, message=self._complete_message or
+                                  f'{self._routing_key} has completed the task')
+
+        if self._complete_message is None:
+            Log.warn(f'{self._routing_key}: undefined complete message')
 
         self._publish_response(response)
 
-    def notify_task_closed(self):
+    def _publish_error(self):
+        response = ResponseObject(request_id=self._properties.correlation_id,
+                                  status=ResponseStatus.FAILED, progress=0.0, message=self._err_message or
+                                  f'{self._routing_key} failed')
+
+        self._publish_response(response)
+
+    def _notify_task_opened(self):
+
+        if not self._task_is_opened:
+            self.publish_message('task is opened')
+            self._task_is_opened = True
+
+    def _notify_task_closed(self):
 
         if not self._task_is_closed:
             self._ch.basic_ack(delivery_tag=self._method.delivery_tag)
             self._task_is_closed = True
 
     def _reset_state(self):
+        self._task_is_opened = False
         self._task_is_closed = False
         self._progress = 0.0
+        self._failed = False
         self._message = ""
+        self._complete_message = None
+        self._err_message = None
 
     def _callback(self, ch, method, properties, body):
 
@@ -108,18 +184,28 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         try:
             self._payload = json.loads(body)
         except json.JSONDecodeError as err:
-            self.publish_error(f"Incorrect input data: {err}")
-            self.notify_task_closed()
+            Log.error(f"Consumer {self.get_routing_key()} incorrect input data: {err}")
+            self._err_message = f"Incorrect input data: {err}"
+            self._publish_error()
+            self._notify_task_closed()
             return
 
         # Run task
+        self._notify_task_opened()
         try:
-            self.run_task()
+            self._run_task()
+
+            if not self._failed:
+                self._publish_completed()
+            else:
+                self._publish_error()
         except Exception as err:
-            Log.error(f'Consumer {self.get_routing_key()} exception: {str(err)}')
-            self.publish_error(f"Exception {err}")
+
+            Log.error(f"Consumer {self.get_routing_key()} exception: {str(err)}")
+            self._err_message = f"Exception {err}"
+            self._publish_error()
         finally:
-            self.notify_task_closed()
+            self._notify_task_closed()
 
     @classmethod
     def get_routing_key(cls):
@@ -136,9 +222,8 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         :return:
         """
         self._consumer_input = input_
-        params = pika.URLParameters(input_.amqp_url)
         self._connection = pika.BlockingConnection(
-            params)
+            pika.URLParameters(input_.amqp_url))
         self._channel = self._connection.channel()
         """durable=False: RabbitMQ WILL lose the queue and messages in it if crashes or quits """
         self._channel.queue_declare(queue=self.get_queue_name(), durable=False)
@@ -147,4 +232,24 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._channel.basic_qos(prefetch_count=self.PREFETCH_COUNT)
         self._channel.basic_consume(queue=self.get_queue_name(), on_message_callback=self._callback, auto_ack=False)
         self._channel.start_consuming()
+
+
+class GeneratorAdapter(RPCConsumer):
+
+    def __init_subclass__(cls, generator_class):
+
+        require(issubclass(generator_class, GeneratorInterface))
+
+        cls.__generator = generator_class
+        super(GeneratorAdapter, cls).__init_subclass__()
+
+    def _run_task(self):
+
+        generator = self.__generator(
+            create_client_notifier(self._payload['username'],  self.__generator.process_name()),
+            create_db_handler(), self._payload, self)
+        generator._run()
+
+
+
 

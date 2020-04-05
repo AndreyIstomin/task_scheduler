@@ -56,3 +56,15 @@ RESPONSE_SCHEMA = {
 }
 
 
+CMD_MESSAGE_SCHEMA = {
+    "cmd":    {
+        "type": "number"
+    },
+
+    "request_id": {
+        "type": "string"
+    },
+
+    "required": ["cmd", "request_id"]
+}
+
