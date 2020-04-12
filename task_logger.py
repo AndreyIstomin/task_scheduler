@@ -1,5 +1,5 @@
 import asyncio
-import json
+import uuid
 from PluginEngine import LogLevel
 from PluginEngine.common import empty_uuid
 from backend.task_scheduler_service import TaskData, RPCData, RPCStatus, CloseRequest
@@ -7,7 +7,7 @@ from backend.task_scheduler_service import TaskData, RPCData, RPCStatus, CloseRe
 
 class EventType:
 
-    EVENT, TASK = 0, 1
+    EVENT, TASK, CMD = range(3)
 
 
 def step_descriptor(rpc_data: RPCData):
@@ -27,6 +27,7 @@ def task_descriptor(task_data: TaskData):
         'uuid': str(task_data.task.uuid()),
         'name': task_data.task.name(),
         'status': task_data.status,
+        'message': task_data.message,
         'steps': list(map(step_descriptor, task_data.requests))
     }
 
@@ -41,13 +42,13 @@ def message_descriptor(msg: str, level: LogLevel):
 
 def close_request_descriptor(req: CloseRequest):
 
-    d = RPCData(empty_uuid, 'Close request', req.progress, req.status, req.message)
-
     return {
-        'type': EventType.TASK,
-        'uuid': req.uuid,
-        'name': f'Close task {req.task_name}, ({req.task_uuid})',
-        'steps': [{d}]
+        'type': EventType.CMD,
+        'uuid': str(req.uuid),
+        'name': f'Close task {req.task_name} ({str(req.task_uuid)[0:8]})',
+        'status': req.status,
+        'message': req.message,
+        'steps': []
     }
 
 

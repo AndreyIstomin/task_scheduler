@@ -1,21 +1,23 @@
-import time
+import uuid
 import json
 import pika
+from functools import wraps
 from PluginEngine import Log, ProgressInterface
 from PluginEngine.common import require
-from LandscapeEditor.backend import RPCConsumerInterface, GeneratorInterface
+from LandscapeEditor.backend import RPCConsumerInterface, GeneratorInterface, CloseRequestException
 from backend.task_scheduler_service import ResponseObject, ResponseStatus
-from backend.task_scheduler_service.rpc_common import RPCBase
+from backend.task_scheduler_service.rpc_common import RPCBase, CMDHandler
 from backend.generator_service import create_client_notifier, create_db_handler
 
 
 class RPCConsumerInput:
 
-    def __init__(self, amqp_url: str, heartbit_timeout: 'seconds', instance_id: int):
+    def __init__(self, amqp_url: str, heartbit_timeout: 'seconds', instance_id: int, cmd_handler: CMDHandler):
 
         self.amqp_url = amqp_url
         self.heartbit_timeout = heartbit_timeout
         self.instance_id = instance_id
+        self.cmd_handler = cmd_handler
 
 
 class RPCConsumerExitCmd(Exception):
@@ -55,14 +57,34 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
     _routing_key = None
 
-    def _run_task(self):
+    """
+    If enabled, CloseRequestException is raised on forced close request;
+    A default value must be False;
+    """
+    _raise_on_close_request = False
 
+    def _check_close_requested(self):
+        pass
+
+    def _raise_if_close_requested(self):
+        if self.is_close_requested():
+            raise CloseRequestException()
+
+    def __new__(cls, *args, **kwargs):
+        if cls._raise_on_close_request:
+            cls._check_close_requested = cls._raise_if_close_requested
+
+        return super(RPCConsumer, cls).__new__(cls, *args, **kwargs)
+
+    def _run_task(self):
         raise NotImplementedError()
 
     def __init__(self):
         self._connection = None
         self._channel = None
         self._consumer_input = None
+        self._cmd_handler = None
+        self._raise_on_close_req = False
 
         self._ch = None
         self._method = None
@@ -78,6 +100,12 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._err_message = None
 
 #  RPCConsumerInterface ################################################################################################
+
+    def raise_on_close_request(self, enabled: bool):
+        self._raise_on_close_req = enabled
+
+    def is_close_requested(self):
+        return self._cmd_handler.is_task_close_requested()
 
     def instance_id(self) -> int:
         return self._consumer_input.instance_id
@@ -131,6 +159,8 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
                          properties=pika.BasicProperties(correlation_id=self._properties.correlation_id),
                          body=response.to_json())
 
+        self._check_close_requested()
+
     def _publish_completed(self):
 
         response = ResponseObject(request_id=self._properties.correlation_id,
@@ -155,11 +185,15 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self.publish_message('task is opened')
             self._task_is_opened = True
 
+        self._check_close_requested()
+
     def _notify_task_closed(self):
 
         if not self._task_is_closed:
             self._ch.basic_ack(delivery_tag=self._method.delivery_tag)
             self._task_is_closed = True
+
+        self._check_close_requested()
 
     def _reset_state(self):
         self._task_is_opened = False
@@ -173,6 +207,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
     def _callback(self, ch, method, properties, body):
 
         Log.info(f"The {self.instance_id()}th test RPC consumer got task")
+
         self._reset_state()
 
         #  First of all update vars
@@ -207,6 +242,47 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         finally:
             self._notify_task_closed()
 
+    def __callback(self, ch, method, properties, body):
+
+        try:
+
+            #  First of all update vars
+            self._ch = ch
+            self._method = method
+            self._properties = properties
+            self._reset_state()
+
+            if not self._cmd_handler.try_open_task(self._properties.correlation_id):
+                user = 'user1'  # TODO
+                self.notify_task_failed(f'Task has been cancelled by user {user}')
+                return
+
+            Log.info(f"The {self.instance_id()}th test RPC consumer got task")
+
+            # Check input
+            try:
+                self._payload = json.loads(body)
+            except json.JSONDecodeError as err:
+                Log.error(f"Consumer {self.get_routing_key()} incorrect input data: {err}")
+                self.notify_task_failed(f"Incorrect input data: {err}")
+                return
+
+            # Run task
+            self._notify_task_opened()
+            self._run_task()
+
+        except Exception as err:
+            Log.error(f"Consumer {self.get_routing_key()} exception: {str(err)}")
+            self._err_message = f"Exception {err}"
+            self._publish_error()
+        finally:
+            if not self._failed:
+                self._publish_completed()
+            else:
+                self._publish_error()
+            self._notify_task_closed()
+            self._cmd_handler.notify_task_closed()
+
     @classmethod
     def get_routing_key(cls):
         return cls._routing_key
@@ -222,6 +298,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         :return:
         """
         self._consumer_input = input_
+        self._cmd_handler = input_.cmd_handler
         self._connection = pika.BlockingConnection(
             pika.URLParameters(input_.amqp_url))
         self._channel = self._connection.channel()
@@ -230,17 +307,19 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._channel.queue_bind(exchange=self.EXCHANGE, queue=self.get_queue_name(),
                                  routing_key=self.get_routing_key())
         self._channel.basic_qos(prefetch_count=self.PREFETCH_COUNT)
-        self._channel.basic_consume(queue=self.get_queue_name(), on_message_callback=self._callback, auto_ack=False)
+        self._channel.basic_consume(queue=self.get_queue_name(), on_message_callback=self.__callback, auto_ack=False)
         self._channel.start_consuming()
 
 
 class GeneratorAdapter(RPCConsumer):
 
-    def __init_subclass__(cls, generator_class):
+    def __init_subclass__(cls, generator_class: type, raise_on_close_request: bool):
 
         require(issubclass(generator_class, GeneratorInterface))
 
         cls.__generator = generator_class
+        cls._raise_on_close_request = raise_on_close_request
+
         super(GeneratorAdapter, cls).__init_subclass__()
 
     def _run_task(self):

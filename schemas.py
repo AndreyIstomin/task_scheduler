@@ -65,6 +65,10 @@ CMD_MESSAGE_SCHEMA = {
         "type": "string"
     },
 
-    "required": ["cmd", "request_id"]
+    "username": USERNAME_PROPERTY,
+
+    "required": ["cmd", "request_id", "username"]
 }
+
+SOCKET_MESSAGE_SCHEMA = CMD_MESSAGE_SCHEMA
 

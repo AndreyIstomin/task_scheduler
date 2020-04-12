@@ -46,7 +46,7 @@ class ResponseObject:
 def array_to_uuid(arr: Array):
 
     with arr.get_lock():
-	    return uuid.UUID(bytes=bytes(arr[:]))
+        return uuid.UUID(bytes=bytes(arr[:]))
 
 
 def uuid_to_array(arr: Array, _uuid: uuid.UUID):

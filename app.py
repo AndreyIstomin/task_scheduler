@@ -28,16 +28,15 @@ async def run_task(request):
         return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
 
 
-async def stop_task(request):
-    data = await request.json()
-
-    ok, msg = task_manager.request_stop_task()
-
-    if ok:
-        return web.Response(status=web.HTTPOk.status_code, text=f"The stop request has been sent")
-    else:
-        return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
-
+# async def stop_task(request):
+#     data = await request.json()
+#
+#     ok, msg = task_manager.request_stop_task()
+#
+#     if ok:
+#         return web.Response(status=web.HTTPOk.status_code, text=f"The stop request has been sent")
+#     else:
+#         return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
 
 
 async def on_shutdown(app):
@@ -53,21 +52,6 @@ async def on_shutdown(app):
 #     await app.shutdown()
 #     await handler.finish_connections(10.0)
 #     await app.cleanup()
-
-class Logger:
-
-    def __init__(self, app):
-
-        self.__app = app
-        self.__msg_queue = []
-
-    def add_msg(self, msg: str):
-        self.__msg_queue.append(msg)
-
-    async def send(self):
-        for _ws in self.__app['websockets']:
-            for msg in self.__msg_queue:
-                await _ws.send_str(msg)
 
 
 def init():
@@ -104,6 +88,9 @@ if __name__ == '__main__':
     scenario_provider = ScenarioProvider()
     task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider, logger)
     task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
+
+    the_app['task_manager'] = task_manager  # xz xz ...
+
     web.run_app(the_app,
                 host=SERVICE_CONFIG['task_scheduler_service']['IP'],
                 port=SERVICE_CONFIG['task_scheduler_service']['port'])

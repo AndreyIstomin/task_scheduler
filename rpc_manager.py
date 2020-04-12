@@ -1,3 +1,5 @@
+import asyncio
+import time
 import uuid
 import json
 import jsonschema
@@ -8,7 +10,7 @@ from PluginEngine.common import require, empty_uuid
 from backend.task_scheduler_service import SchedulerAsyncPublisher, SchedulerAsyncConsumer, RPCConsumerInput
 from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
 from backend.task_scheduler_service.rpc_common import RPCBase, RPCData, RPCStatus, RPCErrorCallbackInterface, \
-    RPCManagerCMD
+    RPCManagerCMD, CMDHandler, CMDHandlerMock, CMDType
 
 
 class RPCConsumerData:
@@ -22,6 +24,7 @@ class RPCManager(RPCBase):
 
     SERVER = 0
     CLIENT = 1
+    STOP_WAIT_SEC = 10
 
     class Request:
 
@@ -51,6 +54,7 @@ class RPCManager(RPCBase):
 
         # Server variables
         self._consumers = {}
+        self._processes = []
         # self._cmd_consumer = None
 
     #  Server interface
@@ -81,7 +85,7 @@ class RPCManager(RPCBase):
 
         return RPCData(request_id, routing_key, 0.0, RPCStatus.WAITING, 'The request has been sent')
 
-    def close_request(self, request_id: uuid.UUID) -> (bool, str):
+    def close_request(self, request_id: uuid.UUID, username: str) -> (bool, str):
         require(self._regime == RPCManager.CLIENT)
         require(self._publisher)
         require(self._publisher.running())
@@ -90,8 +94,11 @@ class RPCManager(RPCBase):
             """
             TODO: here we need to process correctly  confirmation, don't we?
             """
-            self._publisher.publish_message(exchange=self.CMD_EXCHANGE, routing_key=RPCBase.CMD_ROUTING_KEY,
-                                            corr_id=request_id, payload=None)
+
+            self._publisher.publish_message(
+                exchange=self.CMD_EXCHANGE, routing_key=RPCBase.CMD_ROUTING_KEY,
+                corr_id=request_id,
+                payload=json.dumps(RPCManagerCMD(CMDType.CLOSE_TASK, str(request_id), username).to_json()))
             # del self._requests[request_id]
 
             # HERE WE ARE
@@ -114,66 +121,102 @@ class RPCManager(RPCBase):
 
     # protected methods
     @staticmethod
-    def _run_consumer(class_, input_:RPCConsumerInput):
+    def _run_consumer(class_, input_: RPCConsumerInput):
 
         consumer = class_()
         consumer.run(input_)
+
+    def _stop_server(self):
+
+        # self.shutdown_event.set()
+
+        end_time = time.time() + self.STOP_WAIT_SEC
+        num_terminated = 0
+        num_failed = 0
+
+        # -- Wait up to STOP_WAIT_SECS for all processes to complete
+        for proc in self._processes:
+            join_secs = max(0.0, min(end_time - time.time(), self.STOP_WAIT_SEC))
+            proc.join(join_secs)
+
+        # -- Clear the procs list and _terminate_ any procs that
+        # have not yet exited
+        while self._processes:
+            proc = self._processes.pop()
+            if proc.is_alive():
+                proc.terminate()
+                num_terminated += 1
+            else:
+                exitcode = proc.exitcode
+                if exitcode:
+                    num_failed += 1
+
+        Log.info(f'RPC server stopped: {num_failed} failed and {num_terminated} terminated processes')
+
+        return num_failed, num_terminated
 
     def _run_server(self) -> (bool, str):
 
         require(self._regime == RPCManager.SERVER)
         #  Here we implement the most easiest solution - blocking consuming
-        processes = []
+        self._processes = []
         for _type, consumer_data in self._consumers.items():
             for i in range(consumer_data.instance_count):
 
                 process = Process(target=RPCManager._run_consumer,
                                   args=(self._known_consumers[_type],
-                                        RPCConsumerInput(self._amqp_url, self._heart_bit_timeout, i))
+                                        RPCConsumerInput(self._amqp_url, self._heart_bit_timeout, i,
+                                                         CMDHandlerMock(conn=None)))
                                   )
                 consumer_data.processes.append(process)
-                processes.append(process)
+                self._processes.append(process)
                 process.start()
 
         #  Starting command queue(async)
-        # self._cmd_consumer = SchedulerAsyncConsumer(self._amqp_url, self._on_cmd_message)
-        # self._cmd_consumer.EXCHANGE = self.CMD_EXCHANGE
-        # self._cmd_consumer.EXCHANGE_TYPE = 'fanout'
-        # self._cmd_consumer.QUEUE = self.CMD_QUEUE
-        # self._cmd_consumer.ROUTING_KEY = self.CMD_ROUTING_KEY
-        # loop = asyncio.get_event_loop()
-        # self._cmd_consumer.run_in_external_ioloop(loop)
-        #
-        # try:
-        #     loop.run_forever()
-        # finally:
-        #     loop.run_until_complete(loop.shutdown_asyncgens())
-        #     loop.close()
-        #     for process in processes:
-        #         process.join()
+        self._cmd_consumer = SchedulerAsyncConsumer(self._amqp_url, self._on_cmd_message)
+        self._cmd_consumer.EXCHANGE = self.CMD_EXCHANGE
+        self._cmd_consumer.EXCHANGE_TYPE = 'fanout'
+        self._cmd_consumer.EXCHANGE_DURABLE = False
+        self._cmd_consumer.EXCHANGE_AUTO_DELETE = True
+        self._cmd_consumer.QUEUE = self.CMD_QUEUE
+        self._cmd_consumer.ROUTING_KEY = self.CMD_ROUTING_KEY
+        loop = asyncio.get_event_loop()
+        self._cmd_consumer.run_in_external_ioloop(loop)
+
+        try:
+            loop.run_forever()
+        except Exception as ex:
+            Log.error(f'RPC server exception: {ex}')
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+            self._stop_server()
         ####
         #  Blocking connection
-        try:
-            self._connection = pika.BlockingConnection(
-                pika.URLParameters(self._amqp_url))
-            self._channel = self._connection.channel()
-            """durable=False: RabbitMQ WILL lose the queue and messages in it if crashes or quits """
-            self._channel.queue_declare(queue=self.CMD_QUEUE, durable=False)
-            self._channel.queue_bind(exchange=self.CMD_EXCHANGE, queue=self.CMD_QUEUE,
-                                     routing_key=self.CMD_ROUTING_KEY)
-            self._channel.basic_qos(prefetch_count=1)
-            self._channel.basic_consume(queue=self.CMD_QUEUE, on_message_callback=self._on_cmd_message, auto_ack=True)
-            self._channel.start_consuming()
-        finally:
-            self._connection.close()
-            for process in processes:
-                process.join()
+        # try:
+        #     self._connection = pika.BlockingConnection(
+        #         pika.URLParameters(self._amqp_url))
+        #     self._channel = self._connection.channel()
+        #
+        #     self._channel.exchange_declare(
+        #         self.CMD_EXCHANGE, exchange_type='fanout', passive=False, durable=False,
+        #         auto_delete=True, internal=False, arguments=None)
+        #
+        #     """durable=False: RabbitMQ WILL lose the queue and messages in it if crashes or quits """
+        #     self._channel.queue_declare(queue=self.CMD_QUEUE, durable=False)
+        #     self._channel.queue_bind(exchange=self.CMD_EXCHANGE, queue=self.CMD_QUEUE,
+        #                              routing_key=self.CMD_ROUTING_KEY)
+        #     self._channel.basic_qos(prefetch_count=1)
+        #     self._channel.basic_consume(queue=self.CMD_QUEUE, on_message_callback=self._on_cmd_message, auto_ack=True)
+        #     self._channel.start_consuming()
+        # finally:
+        #     self._connection.close()
+        #     self._stop_server()
         ####
 
         return True, 'Ok'
 
-    def _on_cmd_message(self, ch, method, properties, body):
-
+    def _on_cmd_message(self, body):
         # Check input
         try:
             cmd = RPCManagerCMD.from_json(json.loads(body))
@@ -182,7 +225,7 @@ class RPCManager(RPCBase):
         except jsonschema.ValidationError as err:
             Log.error(f'Incorrect JSON format: {err}')
 
-
+        print(f'_on_cmd_message: {body}')
 
         ##
 

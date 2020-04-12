@@ -56,7 +56,7 @@ class TaskManager:
                 task_data = self._tasks[task_uuid] = TaskData()
                 task_data.task = task
                 task_data.requests.append(rpc)
-                task_data.status = TaskStatus.WAITING
+                task_data.set_status(TaskStatus.WAITING)
                 self._requests[rpc.uuid] = task.uuid()
                 result = task_uuid, 'The task has been created'
             else:
@@ -65,8 +65,7 @@ class TaskManager:
                 task_data = TaskData()
                 task_data.task = task
                 task_data.requests = [rpc]
-                task_data.status = TaskStatus.FAILED
-
+                task_data.set_status(TaskStatus.FAILED)
                 self._closed_tasks = (task_uuid, task_data)
                 #
                 result = None, msg
@@ -79,7 +78,7 @@ class TaskManager:
 
         return result
 
-    def request_stop_task(self, task_uuid: uuid.UUID):
+    def request_stop_task(self, task_uuid: uuid.UUID, username: str):
 
         if task_uuid not in self._tasks:
             return False, f'Task {task_uuid} not found'
@@ -91,12 +90,12 @@ class TaskManager:
         for rpc in task_data.requests:
 
             if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
-                pass
+                continue
 
             if rpc.uuid in self._close_requests:
-                pass
+                continue
 
-            ok, msg = self.start_close_request(rpc)
+            ok, msg = self.start_close_request(rpc, username)
             if not ok:
                 return ok, msg
             not_found = False
@@ -128,20 +127,17 @@ class TaskManager:
         rpc.progress = response.progress
         rpc.update_heartbit_time()
 
-        self.process_close_requests(rpc)
-
         if response.status == ResponseStatus.FAILED:
-            task_data.status = TaskStatus.FAILED
-            task.unroll()
-            # Here is the place to handle failure
             rpc.set_failed()
+
+            task_data.set_status(TaskStatus.FAILED)
+            task.unroll()
             self._closed_tasks = (task_uuid, task_data)
-            #
             del self._tasks[task_uuid]
             del self._requests[response.request_id]
 
         elif response.status == ResponseStatus.IN_PROGRESS:
-            task_data.status = TaskStatus.IN_PROGRESS
+            task_data.set_status(TaskStatus.IN_PROGRESS)
             rpc.progress = response.progress
             rpc.message = response.message
 
@@ -149,49 +145,68 @@ class TaskManager:
 
             rpc.set_completed()
 
-            if task.next_step():
+            if task.has_next_step():
 
-                rpc = self._rpc_manager.request(task.current_request(), task.payload)
-                if rpc.status == RPCStatus.WAITING:
-                    task_data.status = TaskStatus.IN_PROGRESS
-                    task_data.requests.append(rpc)
-                    del self._requests[response.request_id]
-                    self._requests[rpc.uuid] = task_data.task.uuid()
-                else:
-                    task_data.status = TaskStatus.FAILED
+                if self.is_close_requested(rpc):
+                    task_data.set_status(TaskStatus.FAILED, msg=f'interrupted by {task.username()}')
                     task.unroll()
-                    # Here the place to log put request failed
                     self._closed_tasks = (task_uuid, task_data)
-                    #
                     del self._tasks[task_uuid]
+                    del self._requests[response.request_id]
+                else:
+
+                    task.next_step()
+
+                    rpc = self._rpc_manager.request(task.current_request(), task.payload)
+                    if rpc.status == RPCStatus.WAITING:
+                        task_data.set_status(TaskStatus.IN_PROGRESS)
+                        task_data.requests.append(rpc)
+                        del self._requests[response.request_id]
+                        self._requests[rpc.uuid] = task_data.task.uuid()
+                    else:
+                        task_data.set_status(TaskStatus.FAILED)
+                        task.unroll()
+                        self._closed_tasks = (task_uuid, task_data)
+                        del self._tasks[task_uuid]
+                        del self._requests[response.request_id]
 
             else:
-                task_data.status = TaskStatus.COMPLETED
+                task_data.set_status(TaskStatus.COMPLETED)
                 task.close()
-                #  Here is the place to log task completeness
                 self._closed_tasks = (task_uuid, task_data)
-                #
                 del self._tasks[task_uuid]
                 del self._requests[response.request_id]
 
+        self.process_close_requests(rpc)
         self._task_logger.update_task(task_data)
 
-    def start_close_request(self, rpc: RPCData):
+    def start_close_request(self, rpc: RPCData, username: str):
 
         require(rpc.status in (RPCStatus.IN_PROGRESS, RPCStatus.WAITING))
         require(rpc.uuid in self._requests)
-        task = self._tasks[self._requests[rpc.uuid]]
+        task = self._tasks[self._requests[rpc.uuid]].task
 
-        req = self._close_requests[rpc.uuid] = CloseRequest(task_uuid=self._requests[rpc.uuid], task_name=task.name())
+        req = self._close_requests[rpc.uuid] = CloseRequest(task_uuid=self._requests[rpc.uuid], task_name=task.name(),
+                                                            username=username)
+        if Log.get_log_level() <= Log.TRACE:
+            Log.trace('new close request')
+            Log.trace(self._close_requests_info())
 
-        if rpc.status == RPCStatus.WAITING:
-            ok, msg = True, f'The task is waiting'
-        else:
-            ok, msg = self._rpc_manager.close_request(rpc.uuid)
-            require(ok)
-            req.set_in_progress()
+        # if rpc.status == RPCStatus.WAITING:
+        #     ok, msg = True, f'The task is waiting'
+        # else:
+        #     ok, msg = self._rpc_manager.close_request(rpc.uuid, req.username)
+        #     require(ok)
+        #     req.set_in_progress()
+
+        ok, msg = self._rpc_manager.close_request(rpc.uuid, req.username)
+        require(ok)
 
         self._task_logger.update_close_request(req)
+
+        if Log.get_log_level() <= Log.TRACE:
+            Log.trace(self._close_requests_info())
+
         return ok, msg
 
     def process_close_requests(self, rpc: RPCData):
@@ -206,13 +221,19 @@ class TaskManager:
             del self._close_requests[rpc.uuid]
 
         elif rpc.status == RPCStatus.IN_PROGRESS:
-            if not req.in_progres():
+            if not req.in_progress():
 
-                ok, msg = self._rpc_manager.close_request(rpc.uuid)
-                require(ok)
+                # ok, msg = self._rpc_manager.close_request(rpc.uuid, req.username)
+                # require(ok)
                 req.set_in_progress()
 
         self._task_logger.update_close_request(req)
+
+        if Log.get_log_level() <= Log.TRACE:
+            Log.trace(self._close_requests_info())
+
+    def is_close_requested(self, rpc: RPCData):
+        return rpc.uuid in self._close_requests
 
     def run_in_external_ioloop(self, io_loop):
 
@@ -223,6 +244,13 @@ class TaskManager:
 
         self._rpc_manager.run_async(io_loop)
 
+    def _close_requests_info(self) -> str:
+        return '''
+close requests:
+------------------------------------
+{requests}
+------------------------------------
+               '''.format(requests='\n'.join(str(req) for req in self._close_requests))
 
 
 

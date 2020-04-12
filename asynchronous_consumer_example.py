@@ -25,10 +25,13 @@ class ExampleConsumer(object):
     commands that were issued and that should surface in the output as well.
 
     """
-    EXCHANGE = 'message'
-    EXCHANGE_TYPE = 'topic'
-    QUEUE = 'text'
-    ROUTING_KEY = 'example.text'
+    EXCHANGE = ' '
+    EXCHANGE_TYPE = 'direct'
+    EXCHANGE_DURABLE = True
+    EXCHANGE_AUTO_DELETE = False
+    QUEUE = ''
+    ROUTING_KEY = ''
+
 
     def __init__(self, amqp_url):
         """Create a new instance of the consumer class, passing in the AMQP
@@ -183,6 +186,8 @@ class ExampleConsumer(object):
         self._channel.exchange_declare(
             exchange=exchange_name,
             exchange_type=self.EXCHANGE_TYPE,
+            durable=self.EXCHANGE_DURABLE,
+            auto_delete=self.EXCHANGE_AUTO_DELETE,
             callback=cb)
 
     def on_exchange_declareok(self, _unused_frame, userdata):

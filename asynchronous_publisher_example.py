@@ -27,11 +27,13 @@ class ExamplePublisher(object):
     messages that have been sent and if they've been confirmed by RabbitMQ.
 
     """
-    EXCHANGE = 'message'
-    EXCHANGE_TYPE = 'topic'
+    EXCHANGE = ''
+    EXCHANGE_TYPE = 'direct'
+    EXCHANGE_DURABLE = True
+    EXCHANGE_AUTO_DELETE = False
     PUBLISH_INTERVAL = 1
-    QUEUE = 'text'
-    ROUTING_KEY = 'example.text'
+    QUEUE = ''
+    ROUTING_KEY = ''
 
     def __init__(self, amqp_url):
         """Setup the example publisher object, passing in the URL we will use
@@ -175,6 +177,8 @@ class ExamplePublisher(object):
         self._channel.exchange_declare(
             exchange=exchange_name,
             exchange_type=self.EXCHANGE_TYPE,
+            durable=self.EXCHANGE_DURABLE,
+            auto_delete=self.EXCHANGE_AUTO_DELETE,
             callback=cb)
 
     def on_exchange_declareok(self, _unused_frame, userdata):

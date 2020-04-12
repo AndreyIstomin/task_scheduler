@@ -10,7 +10,7 @@ __all__ = ['RPCRoadGenerator', 'TestConsumerA', 'TestConsumerB', 'TestConsumerC'
 
 
 @RPCBase.is_consumer('road_generator')
-class RPCRoadGenerator(GeneratorAdapter, generator_class=RoadGenerator):
+class RPCRoadGenerator(GeneratorAdapter, generator_class=RoadGenerator, raise_on_close_request=True):
     pass
 
 
@@ -35,17 +35,16 @@ class TestRPCConsumer(RPCConsumer):
                 pr = (step + 1)/float(step_count)
                 self.publish_progress(pr, f"Current progress {int(pr * 100.0)}%")
 
-        self.publish_completed(f"The {self.instance_id()}th {self.get_routing_key()} completed the task")
-        self._notify_task_closed()
+        self.notify_task_completed(f"The {self.instance_id()}th {self.get_routing_key()} completed the task")
 
 
 @RPCBase.is_consumer('consumer_A')
-class TestConsumerA(TestRPCConsumer, step_time_ms=5):
+class TestConsumerA(TestRPCConsumer, step_time_ms=7):
     pass
 
 
 @RPCBase.is_consumer('consumer_B')
-class TestConsumerB(TestRPCConsumer, step_time_ms=7):
+class TestConsumerB(TestRPCConsumer, step_time_ms=10):
     pass
 
 

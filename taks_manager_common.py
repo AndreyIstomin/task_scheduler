@@ -1,7 +1,7 @@
 import time
 import uuid
 from PluginEngine.common import require
-from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus
+from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus, RPCData
 
 
 TaskStatus = RPCStatus
@@ -20,6 +20,9 @@ class Task:
 
     def uuid(self):
         return self._uuid
+
+    def username(self):
+        return self.payload.get('username', 'unknown')
 
     def load(self, provider: ScenarioProvider) -> (bool, str):
 
@@ -46,6 +49,9 @@ class Task:
         if self._curr_step == self._scenario.step_count():
             return None
         return self._scenario.get_request(self._curr_step)
+
+    def has_next_step(self):
+        return self._curr_step < self._scenario.step_count() - 1
 
     def next_step(self) -> bool:
         require(self._valid)
@@ -75,11 +81,17 @@ class TaskData:
         self.task = None
         self.requests = []
         self.status = TaskStatus.INACTIVE
+        self.message = ''
+
+    def set_status(self, status: 'TaskStatus', msg=None):
+
+        self.status = status
+        self.message = msg or TaskStatus.verbose(status)
 
 
 class CloseRequest:
 
-    def __init__(self, task_uuid: uuid.UUID, task_name: str):
+    def __init__(self, task_uuid: uuid.UUID, task_name: str, username: str):
         self.uuid = uuid.uuid4()
         self.time = time.time()
         self.task_name = task_name
@@ -87,6 +99,9 @@ class CloseRequest:
         self.progress = 0.0
         self.message = 'waiting'
         self.status = RPCStatus.WAITING
+        self.username = username
+
+        self.__mock_rpc_uuid = uuid.uuid4()
 
     def set_in_progress(self):
         require(self.status == RPCStatus.WAITING)
@@ -99,4 +114,9 @@ class CloseRequest:
 
     def set_completed(self):
         self.status = RPCStatus.COMPLETED
+        self.message = 'completed'
+        self.progress = 1.0
+
+    def mock_rpc(self) -> RPCData:
+        return RPCData(self.__mock_rpc_uuid, 'Close request', self.progress, self.status, self.message)
 
