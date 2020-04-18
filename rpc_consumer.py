@@ -61,7 +61,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
     If enabled, CloseRequestException is raised on forced close request;
     A default value must be False;
     """
-    _raise_on_close_request = False
+    _raise_on_close_request = True
 
     def _check_close_requested(self):
         pass
@@ -122,6 +122,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
                                   status=ResponseStatus.IN_PROGRESS, progress=self._progress, message=self._message)
 
         self._publish_response(response)
+        self._check_close_requested()
 
     def publish_message(self, message: str):
 
@@ -130,6 +131,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
                                   status=ResponseStatus.IN_PROGRESS, progress=self._progress, message=self._message)
 
         self._publish_response(response)
+        self._check_close_requested()
 
     def create_progress(self, step_count: int, msg: str, step: int) -> ProgressInterface:
         """
@@ -159,8 +161,6 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
                          properties=pika.BasicProperties(correlation_id=self._properties.correlation_id),
                          body=response.to_json())
 
-        self._check_close_requested()
-
     def _publish_completed(self):
 
         response = ResponseObject(request_id=self._properties.correlation_id,
@@ -185,15 +185,11 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self.publish_message('task is opened')
             self._task_is_opened = True
 
-        self._check_close_requested()
-
     def _notify_task_closed(self):
 
         if not self._task_is_closed:
             self._ch.basic_ack(delivery_tag=self._method.delivery_tag)
             self._task_is_closed = True
-
-        self._check_close_requested()
 
     def _reset_state(self):
         self._task_is_opened = False
@@ -271,10 +267,15 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self._notify_task_opened()
             self._run_task()
 
+        except CloseRequestException:
+
+            user = 'user1'  # TODO!!!
+            self.notify_task_failed(f'Interrupted by {user}')
+
         except Exception as err:
             Log.error(f"Consumer {self.get_routing_key()} exception: {str(err)}")
-            self._err_message = f"Exception {err}"
-            self._publish_error()
+
+            self.notify_task_failed(f'Exception: {err}')
         finally:
             if not self._failed:
                 self._publish_completed()

@@ -66,8 +66,8 @@ class SchedulerAsyncConsumer(ExampleConsumer):
         self.was_consuming = True
         self._consuming = True
 
-    def run_in_external_ioloop(self, ioloop):
-        self._connection = self.connect(custom_ioloop=ioloop)
+    def run_in_loop(self, loop):
+        self._connection = self.connect(custom_ioloop=loop)
 
 
 class SchedulerAsyncPublisher(ExamplePublisher):
@@ -102,7 +102,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
         self._feedback_consumer.EXCHANGE_TYPE = 'direct'
         self._feedback_consumer.ROUTING_KEY = self.REPLY_ROUTING_KEY
 
-        self._feedback_consumer.run_in_external_ioloop(ioloop)
+        self._feedback_consumer.run_in_loop(ioloop)
 
     def start_publishing(self):
         """This method will enable delivery confirmations and schedule the

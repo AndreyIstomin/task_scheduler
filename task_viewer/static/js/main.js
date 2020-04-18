@@ -90,7 +90,8 @@ $(document).ready(function(){
             updateCloseBtn(taskBlock, obj);
 
         list_group = taskBlock.querySelector(".list-group")
-        if(obj.status < TaskStatus.COMPLETED && obj.steps.length > 0){
+        //if(obj.status < TaskStatus.COMPLETED && obj.steps.length > 0){
+        if(obj.steps.length > 0){
             if(!list_group){
                 list_group = htmlToElement('<div class="list-group"></div>');
                 taskBlock.append(list_group);
@@ -100,11 +101,11 @@ $(document).ready(function(){
                 updateSubTask(list_group, obj.steps[i]);
             }
         }
-        else
-        {
-            if(list_group)
-                list_group.remove();
-        }
+        //else
+        //{
+        //    if(list_group)
+        //        list_group.remove();
+        //}
     }
 
     /*function updateCMDBlock(parent, obj) {
@@ -159,7 +160,7 @@ $(document).ready(function(){
 
     function updateCloseBtn(taskBlock, obj){
         let closeBtn = document.getElementById(`close_${obj.uuid}`);
-        if(obj.status == TaskStatus.IN_PROGRESS)
+        if(obj.status == TaskStatus.IN_PROGRESS || obj.status == TaskStatus.WAITING)
         {
             if(!closeBtn) {
                 closeBtn =

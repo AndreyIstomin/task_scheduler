@@ -34,6 +34,7 @@ class ScenarioProvider:
 
         # steps = ['import_road_osm', 'generate_road']
         steps = ['consumer_A', 'consumer_B']
+        # steps = ['consumer_A']
         # steps = ['road_generator']
         name = 'test_scenario'
         json_data = json.dumps(steps)

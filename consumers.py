@@ -19,8 +19,9 @@ class TestRPCConsumer(RPCConsumer):
 
     __step_ms = 1
 
-    def __init_subclass__(cls, step_time_ms=1):
+    def __init_subclass__(cls, step_time_ms=1, raise_on_close_req=False):
         cls.__step_ms = step_time_ms
+        cls._raise_on_close_request = raise_on_close_req
         super(TestRPCConsumer, cls).__init_subclass__()
 
     def _run_task(self):
@@ -39,12 +40,12 @@ class TestRPCConsumer(RPCConsumer):
 
 
 @RPCBase.is_consumer('consumer_A')
-class TestConsumerA(TestRPCConsumer, step_time_ms=7):
+class TestConsumerA(TestRPCConsumer, step_time_ms=7, raise_on_close_req=True):
     pass
 
 
 @RPCBase.is_consumer('consumer_B')
-class TestConsumerB(TestRPCConsumer, step_time_ms=10):
+class TestConsumerB(TestRPCConsumer, step_time_ms=10, raise_on_close_req=True):
     pass
 
 

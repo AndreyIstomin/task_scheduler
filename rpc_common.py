@@ -10,6 +10,7 @@ import uuid
 import time
 import json
 import jsonschema
+import asyncio
 from enum import Enum
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection, wait
@@ -58,6 +59,7 @@ class RPCManagerCMD:
 
 
 CMD_WAIT_TIMEOUT_SEC = 0.02
+CMD_SLEEP_SEC = 0.02
 
 
 class CMDHandlerMock:
@@ -97,6 +99,7 @@ class CMDHandler:
             self._reset()
             return False
 
+        Log.trace(f'CMDHandler ({str(task_uuid)[0:8]}): task has been opened')
         return True
 
     def is_task_close_requested(self):
@@ -117,7 +120,9 @@ class CMDHandler:
         Waits until the server replied
         """
         self._reset()
+        self._conn.send(str(self._task_uuid))
         self._wait_reply()
+        Log.trace(f'CMDHandler ({str(self._task_uuid)[0:8]}): task has been closed')
 
 # private
     def _wait_reply(self):
@@ -125,8 +130,9 @@ class CMDHandler:
         rsp = (0, 0)
         while rsp[1] != str(self._task_uuid):
             rsp = self._conn.recv()
+            Log.trace(f'CMDHandler ({str(self._task_uuid)[0:8]}): got message: {rsp}')
 
-        return rsp[1]
+        return rsp[0]
 
     def _wait_reply_timed_out(self):
 
@@ -135,10 +141,11 @@ class CMDHandler:
 
             if self._conn.poll(timeout=CMD_WAIT_TIMEOUT_SEC):
                 rsp = self._conn.recv()
+                Log.trace(f'CMDHandler ({str(self._task_uuid)[0:8]}): got message: {rsp}')
             else:
                 return None
 
-        return rsp
+        return rsp[0]
 
     def _reset(self):
 
@@ -152,7 +159,7 @@ class CMDManager:
     class ProcessDescriptor:
 
         def __init__(self, conn: Connection):
-            self.conn = None
+            self.conn = conn
             self.task_uuid = empty_uuid
             self.close_requested = False
 
@@ -164,19 +171,21 @@ class CMDManager:
     def __init__(self):
 
         self._processes = {}
-        self._active_tasks = {}
+        self._tasks_id_to_process_id = {}
         self._close_requests = set()
 
     def close_request(self, task_uuid: uuid.UUID):
         require(isinstance(task_uuid, uuid.UUID))
 
+        # TODO: check 
+
         # The task has not been sent to consumer yet
-        if task_uuid not in self._active_tasks:
+        if task_uuid not in self._tasks_id_to_process_id:
             self._close_requests.add(task_uuid)
 
         # Task is already consuming
         else:
-            process = self._processes[self._active_tasks[task_uuid]]
+            process = self._processes[self._tasks_id_to_process_id[task_uuid]]
             if not process.close_requested:
                 process.close_requested = True
                 process.conn.send([CMDType.CLOSE_TASK, str(task_uuid)])
@@ -187,6 +196,8 @@ class CMDManager:
         parent_conn, child_conn = Pipe()
         self._processes[process_id] = self.ProcessDescriptor(parent_conn)
 
+        parent_conn.process_id = process_id  # TODO: ?
+
         return CMDHandler(child_conn)
 
     def remove_cmd_handler(self, process_id: int):
@@ -194,9 +205,19 @@ class CMDManager:
         self._processes[process_id].conn.close()
         del self._processes[process_id]
 
-    def run_in_loop(self, io_loop):
+    async def poll_coro(self):
 
-        pass
+        while True:
+
+            wake_up_at = asyncio.get_event_loop().time() + CMD_SLEEP_SEC
+            self._poll_processes()
+            sleep_time = max(0.0, wake_up_at - asyncio.get_event_loop().time())
+            # Log.info(f'sleep time: {int(sleep_time * 1000.0)} ms')
+            await asyncio.sleep(max(0.0, wake_up_at - asyncio.get_event_loop().time()))
+
+    def run_in_loop(self, io_loop: asyncio.AbstractEventLoop):
+
+        io_loop.create_task(self.poll_coro())
 
     def close(self):
 
@@ -205,39 +226,46 @@ class CMDManager:
 # protected
     def _poll_processes(self):
 
-        # for conn in wait([item.conn for item in self._processes], timeout=self.WAIT_TIMEOUT_SEC): TODO: check it
-        for idx, item in self._processes.items():
+        for conn in wait([item.conn for item in self._processes.values()], timeout=CMD_WAIT_TIMEOUT_SEC):
+            self._poll(conn)
 
-            self._poll(idx, item)
+    def _poll(self, conn: Connection):
 
-    def _poll(self, idx: int, process: ProcessDescriptor):
+        process = self._processes[conn.process_id]
 
-        if process.conn.poll(CMD_WAIT_TIMEOUT_SEC):
+        msg = process.conn.recv()
+        task_uuid = uuid.UUID(msg)
 
-            task_uuid = uuid.UUID(process.conn.recv())
+        Log.trace(f'CMDManager got message from {conn.process_id}th consumer: {msg}')
 
-            if task_uuid != empty_uuid:
+        if task_uuid != empty_uuid:
 
-                require(task_uuid not in self._active_tasks)
+            require(task_uuid not in self._tasks_id_to_process_id)
 
-                if task_uuid not in self._close_requests:
-                    process.conn.send([CMDType.OK, str(task_uuid)])
-                    process.task_uuid = task_uuid
-                    self._active_tasks[task_uuid] = idx
-
-                else:
-                    process.conn.send([CMDType.CLOSE_TASK, str(task_uuid)])
-                    process.reset_task()
-                    self._close_requests.discard(task_uuid)
-
+            if task_uuid not in self._close_requests:
+                process.conn.send([CMDType.OK, str(task_uuid)])
             else:
+                process.conn.send([CMDType.CLOSE_TASK, str(task_uuid)])
 
-                require(task_uuid in self._active_tasks)
+            self._register_task(conn.process_id, task_uuid)
 
-                process.conn.send([CMDType.OK, str(empty_uuid)])
-                process.reset_task()
-                del self._active_tasks[task_uuid]
-                self._close_requests.discard(task_uuid)
+        else:
+
+            process.conn.send([CMDType.OK, str(empty_uuid)])
+            self._unregister_task(conn.process_id)
+
+    def _register_task(self, process_id: int, task_uuid: uuid.UUID):
+
+        process = self._processes[process_id]
+        process.task_uuid = task_uuid
+        self._tasks_id_to_process_id[task_uuid] = process_id
+
+    def _unregister_task(self, process_id: int):
+
+        process = self._processes[process_id]
+        del self._tasks_id_to_process_id[process.task_uuid]
+        self._close_requests.discard(process.task_uuid)
+        process.reset_task()
 
 
 class RPCBase:

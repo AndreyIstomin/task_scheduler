@@ -10,14 +10,14 @@ from PluginEngine.common import require, empty_uuid
 from backend.task_scheduler_service import SchedulerAsyncPublisher, SchedulerAsyncConsumer, RPCConsumerInput
 from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
 from backend.task_scheduler_service.rpc_common import RPCBase, RPCData, RPCStatus, RPCErrorCallbackInterface, \
-    RPCManagerCMD, CMDHandler, CMDHandlerMock, CMDType
+    RPCManagerCMD, CMDManager, CMDHandler, CMDHandlerMock, CMDType
 
 
 class RPCConsumerData:
 
-    def __init__(self, instance_count: int):
+    def __init__(self, routing_key: str, instance_count: int):
+        self.routing_key = routing_key
         self.instance_count = instance_count
-        self.processes = []
 
 
 class RPCManager(RPCBase):
@@ -53,9 +53,10 @@ class RPCManager(RPCBase):
         self._publisher = None
 
         # Server variables
-        self._consumers = {}
+        self._consumers = []
         self._processes = []
-        # self._cmd_consumer = None
+        self._cmd_consumer = None
+        self._cmd_manager = None
 
     #  Server interface
     def add_consumer(self, routing_key: str, instance_count: int):
@@ -63,9 +64,7 @@ class RPCManager(RPCBase):
         require(self._regime == RPCManager.SERVER)
         require(not self._running)
         require(routing_key in self._known_consumers)
-        require(routing_key not in self._consumers)
-
-        self._consumers[routing_key] = RPCConsumerData(instance_count)
+        self._consumers.append(RPCConsumerData(routing_key, instance_count))
 
     # Client interface
     def request(self, routing_key: str, payload: dict) -> RPCData:
@@ -158,17 +157,19 @@ class RPCManager(RPCBase):
     def _run_server(self) -> (bool, str):
 
         require(self._regime == RPCManager.SERVER)
+        self._cmd_manager = CMDManager()
         #  Here we implement the most easiest solution - blocking consuming
         self._processes = []
-        for _type, consumer_data in self._consumers.items():
-            for i in range(consumer_data.instance_count):
+        for consumer_data in self._consumers:
+            for instance_id in range(consumer_data.instance_count):
 
-                process = Process(target=RPCManager._run_consumer,
-                                  args=(self._known_consumers[_type],
-                                        RPCConsumerInput(self._amqp_url, self._heart_bit_timeout, i,
-                                                         CMDHandlerMock(conn=None)))
-                                  )
-                consumer_data.processes.append(process)
+                process = Process(
+                    target=RPCManager._run_consumer,
+                    args=(self._known_consumers[consumer_data.routing_key],
+                          RPCConsumerInput(
+                              self._amqp_url, self._heart_bit_timeout, instance_id,
+                              self._cmd_manager.create_cmd_handler(process_id=len(self._processes)))))
+
                 self._processes.append(process)
                 process.start()
 
@@ -181,7 +182,8 @@ class RPCManager(RPCBase):
         self._cmd_consumer.QUEUE = self.CMD_QUEUE
         self._cmd_consumer.ROUTING_KEY = self.CMD_ROUTING_KEY
         loop = asyncio.get_event_loop()
-        self._cmd_consumer.run_in_external_ioloop(loop)
+        self._cmd_consumer.run_in_loop(loop)
+        self._cmd_manager.run_in_loop(loop)
 
         try:
             loop.run_forever()
@@ -217,17 +219,19 @@ class RPCManager(RPCBase):
         return True, 'Ok'
 
     def _on_cmd_message(self, body):
-        # Check input
         try:
             cmd = RPCManagerCMD.from_json(json.loads(body))
         except json.JSONDecodeError as err:
             Log.error(f'Incorrect JSON: {err}')
+            return
         except jsonschema.ValidationError as err:
             Log.error(f'Incorrect JSON format: {err}')
+            return
 
         print(f'_on_cmd_message: {body}')
 
-        ##
+        if cmd.type == CMDType.CLOSE_TASK:
+            self._cmd_manager.close_request(cmd.request_id)
 
     def _run_server_async(self, io_loop) -> (bool, str):
 
