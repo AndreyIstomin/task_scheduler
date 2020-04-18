@@ -206,7 +206,7 @@ $(document).ready(function(){
             updateCMDDescription(obj);
         else
             showMessage('Error: unknown log type');
-        window.scrollTo(0,document.body.scrollHeight);
+        //window.scrollTo(0,document.body.scrollHeight);
     }
 
     function onCloseBtnClick(task_id) {

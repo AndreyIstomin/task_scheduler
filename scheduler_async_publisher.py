@@ -13,9 +13,7 @@ from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')
-# logging.basicConfig(filename="d:/tmp/scheduler.log", level=logging.INFO)
-logging.basicConfig(level=logging.INFO)
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger('async_publisher')
 
 
 class SchedulerAsyncConsumer(ExampleConsumer):

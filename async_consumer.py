@@ -10,7 +10,7 @@ from backend.task_scheduler_service import ExampleConsumer, ResponseObject, Resp
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger('async_consumer')
 
 
 class AsyncConsumer(ExampleConsumer):

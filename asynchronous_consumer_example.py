@@ -9,7 +9,7 @@ from pika.adapters.asyncio_connection import AsyncioConnection
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger('async_consumer')
 
 
 class ExampleConsumer(object):
@@ -30,6 +30,7 @@ class ExampleConsumer(object):
     EXCHANGE_DURABLE = True
     EXCHANGE_AUTO_DELETE = False
     QUEUE = ''
+    QUEUE_AUTO_DELETE = False
     ROUTING_KEY = ''
 
 
@@ -199,9 +200,9 @@ class ExampleConsumer(object):
 
         """
         LOGGER.info('Exchange declared: %s', userdata)
-        self.setup_queue(self.QUEUE)
+        self.setup_queue(self.QUEUE, self.QUEUE_AUTO_DELETE)
 
-    def setup_queue(self, queue_name):
+    def setup_queue(self, queue_name, auto_delete):
         """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
         command. When it is complete, the on_queue_declareok method will
         be invoked by pika.
@@ -211,7 +212,7 @@ class ExampleConsumer(object):
         """
         LOGGER.info('Declaring queue %s', queue_name)
         cb = functools.partial(self.on_queue_declareok, userdata=queue_name)
-        self._channel.queue_declare(queue=queue_name, callback=cb)
+        self._channel.queue_declare(queue=queue_name, callback=cb, auto_delete=auto_delete)
 
     def on_queue_declareok(self, _unused_frame, userdata):
         """Method invoked by pika when the Queue.Declare RPC call made in

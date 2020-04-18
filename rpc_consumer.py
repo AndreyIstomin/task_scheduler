@@ -61,20 +61,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
     If enabled, CloseRequestException is raised on forced close request;
     A default value must be False;
     """
-    _raise_on_close_request = True
-
-    def _check_close_requested(self):
-        pass
-
-    def _raise_if_close_requested(self):
-        if self.is_close_requested():
-            raise CloseRequestException()
-
-    def __new__(cls, *args, **kwargs):
-        if cls._raise_on_close_request:
-            cls._check_close_requested = cls._raise_if_close_requested
-
-        return super(RPCConsumer, cls).__new__(cls, *args, **kwargs)
+    _raise_on_close_request = False
 
     def _run_task(self):
         raise NotImplementedError()
@@ -202,44 +189,6 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
     def _callback(self, ch, method, properties, body):
 
-        Log.info(f"The {self.instance_id()}th test RPC consumer got task")
-
-        self._reset_state()
-
-        #  First of all update vars
-        self._ch = ch
-        self._method = method
-        self._properties = properties
-
-        # Check input
-        try:
-            self._payload = json.loads(body)
-        except json.JSONDecodeError as err:
-            Log.error(f"Consumer {self.get_routing_key()} incorrect input data: {err}")
-            self._err_message = f"Incorrect input data: {err}"
-            self._publish_error()
-            self._notify_task_closed()
-            return
-
-        # Run task
-        self._notify_task_opened()
-        try:
-            self._run_task()
-
-            if not self._failed:
-                self._publish_completed()
-            else:
-                self._publish_error()
-        except Exception as err:
-
-            Log.error(f"Consumer {self.get_routing_key()} exception: {str(err)}")
-            self._err_message = f"Exception {err}"
-            self._publish_error()
-        finally:
-            self._notify_task_closed()
-
-    def __callback(self, ch, method, properties, body):
-
         try:
 
             #  First of all update vars
@@ -284,6 +233,10 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self._notify_task_closed()
             self._cmd_handler.notify_task_closed()
 
+    def _check_close_requested(self):
+        if self.is_close_requested():
+            raise CloseRequestException()
+
     @classmethod
     def get_routing_key(cls):
         return cls._routing_key
@@ -308,7 +261,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._channel.queue_bind(exchange=self.EXCHANGE, queue=self.get_queue_name(),
                                  routing_key=self.get_routing_key())
         self._channel.basic_qos(prefetch_count=self.PREFETCH_COUNT)
-        self._channel.basic_consume(queue=self.get_queue_name(), on_message_callback=self.__callback, auto_ack=False)
+        self._channel.basic_consume(queue=self.get_queue_name(), on_message_callback=self._callback, auto_ack=False)
         self._channel.start_consuming()
 
 

@@ -106,6 +106,23 @@ class RPCManager(RPCBase):
         else:
             return False, 'Request not found'
 
+    def notify_task_closed(self, request_id: uuid.UUID, username: str) -> (bool, str):
+        require(self._regime == RPCManager.CLIENT)
+        require(self._publisher)
+        require(self._publisher.running())
+
+        if request_id in self._requests:
+
+            self._publisher.publish_message(
+                exchange=self.CMD_EXCHANGE, routing_key=RPCBase.CMD_ROUTING_KEY,
+                corr_id=request_id,
+                payload=json.dumps(RPCManagerCMD(CMDType.NOTIFY_TASK_CLOSED, str(request_id), username).to_json()))
+            return True, 'Ok'
+
+        else:
+            return False, 'Request not found'
+
+
     # Both
     def run_async(self, io_loop) -> (bool, str):
         self._io_loop = io_loop
@@ -179,7 +196,8 @@ class RPCManager(RPCBase):
         self._cmd_consumer.EXCHANGE_TYPE = 'fanout'
         self._cmd_consumer.EXCHANGE_DURABLE = False
         self._cmd_consumer.EXCHANGE_AUTO_DELETE = True
-        self._cmd_consumer.QUEUE = self.CMD_QUEUE
+        self._cmd_consumer.QUEUE = ''
+        self._cmd_consumer.QUEUE_AUTO_DELETE = True
         self._cmd_consumer.ROUTING_KEY = self.CMD_ROUTING_KEY
         loop = asyncio.get_event_loop()
         self._cmd_consumer.run_in_loop(loop)
@@ -228,10 +246,13 @@ class RPCManager(RPCBase):
             Log.error(f'Incorrect JSON format: {err}')
             return
 
-        print(f'_on_cmd_message: {body}')
-
         if cmd.type == CMDType.CLOSE_TASK:
             self._cmd_manager.close_request(cmd.request_id)
+
+        elif cmd.type == CMDType.NOTIFY_TASK_CLOSED:
+            Log.trace('RPC Server got task close notification')
+            self._cmd_manager.cancel_close_request(cmd.request_id)
+
 
     def _run_server_async(self, io_loop) -> (bool, str):
 

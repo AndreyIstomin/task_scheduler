@@ -218,6 +218,7 @@ class TaskManager:
 
         if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
             req.set_completed()
+            self._rpc_manager.notify_task_closed(rpc.uuid, req.username)
             del self._close_requests[rpc.uuid]
 
         elif rpc.status == RPCStatus.IN_PROGRESS:

@@ -17,13 +17,13 @@ from multiprocessing.connection import Connection, wait
 from PluginEngine import Log
 from PluginEngine.common import require, empty_uuid
 from backend.task_scheduler_service import Scenario
-from backend.task_scheduler_service.common import ResponseObject, uuid_to_array, array_to_uuid
+from backend.task_scheduler_service.common import ResponseObject, shorten_uuid
 from backend.task_scheduler_service.schemas import CMD_MESSAGE_SCHEMA
 
 
 class CMDTypeEnum:
 
-    OK, CLOSE_TASK = __list = range(2)
+    OK, CLOSE_TASK, NOTIFY_TASK_CLOSED = __list = range(3)
 
     def __iter__(self):
         return self.__list.__iter__()
@@ -58,7 +58,7 @@ class RPCManagerCMD:
         return cls(**d)
 
 
-CMD_WAIT_TIMEOUT_SEC = 0.02
+CMD_WAIT_TIMEOUT_SEC = 0.002
 CMD_SLEEP_SEC = 0.02
 
 
@@ -99,7 +99,7 @@ class CMDHandler:
             self._reset()
             return False
 
-        Log.trace(f'CMDHandler ({str(task_uuid)[0:8]}): task has been opened')
+        Log.trace(f'CMDHandler ({shorten_uuid(task_uuid)}): task has been opened')
         return True
 
     def is_task_close_requested(self):
@@ -122,7 +122,7 @@ class CMDHandler:
         self._reset()
         self._conn.send(str(self._task_uuid))
         self._wait_reply()
-        Log.trace(f'CMDHandler ({str(self._task_uuid)[0:8]}): task has been closed')
+        Log.trace(f'CMDHandler ({shorten_uuid(self._task_uuid)}): task has been closed')
 
 # private
     def _wait_reply(self):
@@ -130,7 +130,7 @@ class CMDHandler:
         rsp = (0, 0)
         while rsp[1] != str(self._task_uuid):
             rsp = self._conn.recv()
-            Log.trace(f'CMDHandler ({str(self._task_uuid)[0:8]}): got message: {rsp}')
+            Log.trace(f'CMDHandler ({shorten_uuid(self._task_uuid)}): got message: {rsp}')
 
         return rsp[0]
 
@@ -139,9 +139,9 @@ class CMDHandler:
         rsp = (0, 0)
         while rsp[1] != str(self._task_uuid):
 
-            if self._conn.poll(timeout=CMD_WAIT_TIMEOUT_SEC):
+            if self._conn.poll(timeout=CMD_WAIT_TIMEOUT_SEC * 10.0):
                 rsp = self._conn.recv()
-                Log.trace(f'CMDHandler ({str(self._task_uuid)[0:8]}): got message: {rsp}')
+                Log.trace(f'CMDHandler ({shorten_uuid(self._task_uuid)}): got message: {rsp}')
             else:
                 return None
 
@@ -168,6 +168,9 @@ class CMDManager:
             self.task_uuid = empty_uuid
             self.close_requested = False
 
+        def __str__(self):
+            return f'uuid: {shorten_uuid(self.task_uuid)}, close requested: {self.close_requested}'
+
     def __init__(self):
 
         self._processes = {}
@@ -189,6 +192,8 @@ class CMDManager:
             if not process.close_requested:
                 process.close_requested = True
                 process.conn.send([CMDType.CLOSE_TASK, str(task_uuid)])
+
+        self._log_close_info()
 
     def create_cmd_handler(self, process_id: int):
         require(process_id not in self._processes)
@@ -219,9 +224,11 @@ class CMDManager:
 
         io_loop.create_task(self.poll_coro())
 
-    def close(self):
+    def cancel_close_request(self, task_uuid: uuid.UUID):
 
-        pass
+        self._close_requests.discard(task_uuid)
+
+        self._log_close_info()
 
 # protected
     def _poll_processes(self):
@@ -259,6 +266,10 @@ class CMDManager:
         process = self._processes[process_id]
         process.task_uuid = task_uuid
         self._tasks_id_to_process_id[task_uuid] = process_id
+        self._log_close_info()
+        self._log_process_info()
+        require(
+            len(self._tasks_id_to_process_id) == sum(1 for _ in self._processes.values() if _.task_uuid != empty_uuid))
 
     def _unregister_task(self, process_id: int):
 
@@ -266,6 +277,38 @@ class CMDManager:
         del self._tasks_id_to_process_id[process.task_uuid]
         self._close_requests.discard(process.task_uuid)
         process.reset_task()
+        self._log_close_info()
+        self._log_process_info()
+
+        require(
+            len(self._tasks_id_to_process_id) == sum(1 for _ in self._processes.values() if _.task_uuid != empty_uuid))
+
+    def _log_close_info(self, log_level=Log.TRACE):
+
+        if Log.get_log_level() > log_level:
+            return
+
+        Log.log_message(log_level, f'''
+---CMD Manager----------------------
+close requested for: 
+{','.join(shorten_uuid(item) for item in self._close_requests)}
+close in progress for:
+{','.join(shorten_uuid(item.task_uuid) for item in self._processes.values() if item.close_requested) }
+------------------------------------''',
+                        log_type=Log.CONSOLE)
+
+    def _log_process_info(self, log_level=Log.TRACE):
+
+        if Log.get_log_level() > log_level:
+            return
+
+        processes = '\n'.join(f'{key}: {value}' for key, value in self._processes.items() if value.task_uuid != empty_uuid)
+
+        Log.log_message(log_level, f'''
+---CMD Manager----------------------
+active processes:
+{processes}
+------------------------------------''', log_type=Log.CONSOLE)
 
 
 class RPCBase:
@@ -275,7 +318,7 @@ class RPCBase:
 
     EXCHANGE = 'rpc_manager_exchange'
     CMD_EXCHANGE = 'rpc_manager_cmd_exchange'
-    CMD_QUEUE = 'rpc_manager_cmd_queue'
+    # CMD_QUEUE = ''
     CMD_ROUTING_KEY = 'rpc_manager_cmd'
 
     PREFETCH_COUNT = 1
@@ -288,7 +331,7 @@ class RPCBase:
 
         def register(class_):
             if routing_key not in cls._known_consumers:
-                Log.debug(f'{routing_key} has been registered as RPC consumer')
+                Log.trace(f'{routing_key} has been registered as RPC consumer')
                 class_._routing_key = routing_key
                 cls._known_consumers[class_.get_routing_key()] = class_
 

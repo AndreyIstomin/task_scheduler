@@ -5,7 +5,7 @@ from multiprocessing import Array
 from backend.task_scheduler_service.schemas import RESPONSE_SCHEMA
 
 
-__all__ = ["ResponseStatus", "ResponseObject", "array_to_uuid", "uuid_to_array"]
+__all__ = ["ResponseStatus", "ResponseObject", "array_to_uuid", "uuid_to_array", "shorten_uuid"]
 
 
 class ResponseStatus:
@@ -55,3 +55,8 @@ def uuid_to_array(arr: Array, _uuid: uuid.UUID):
         arr[:] = _uuid.bytes
 
     return arr
+
+
+def shorten_uuid(_uuid: uuid.UUID):
+
+    return str(_uuid)[0:8]
