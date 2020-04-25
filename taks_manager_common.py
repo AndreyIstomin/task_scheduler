@@ -1,7 +1,7 @@
 import time
 import uuid
 from PluginEngine.common import require
-from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus, RPCData
+from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus, RPCData, EditLockManager
 
 
 TaskStatus = RPCStatus
@@ -40,7 +40,7 @@ class Task:
         self._curr_step = 0
         return True, 'Ok'
 
-    def start(self):
+    def start(self, lock_manager: EditLockManager):
         self._curr_step = 0
 
     def current_request(self) -> str:
@@ -53,7 +53,7 @@ class Task:
     def has_next_step(self):
         return self._curr_step < self._scenario.step_count() - 1
 
-    def next_step(self) -> bool:
+    def next_step(self, lock_manager: EditLockManager) -> bool:
         require(self._valid)
         require(self._scenario)
         if self._curr_step < self._scenario.step_count():

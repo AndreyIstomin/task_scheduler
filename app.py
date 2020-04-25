@@ -4,7 +4,7 @@ import jinja2
 import aiohttp_jinja2
 from aiohttp import web
 from backend.config import SERVICE_CONFIG
-from backend.task_scheduler_service import ScenarioProvider, TaskManager, TaskLogger
+from backend.task_scheduler_service import ScenarioProvider, TaskManager, TaskLogger, EditLockManager
 from backend.task_scheduler_service.schemas import RUN_TASK_SCHEMA
 from backend.task_scheduler_service.routes import routes
 
@@ -86,7 +86,9 @@ if __name__ == '__main__':
     logger = TaskLogger(the_app)
 
     scenario_provider = ScenarioProvider()
-    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider, logger)
+    edit_lock_manager = EditLockManager()
+    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider,
+                               edit_lock_manager, logger)
     task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
 
     the_app['task_manager'] = task_manager  # xz xz ...

@@ -3,7 +3,7 @@ import time
 from PluginEngine import Log
 from PluginEngine.common import require, empty_uuid
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
-    RPCStatus, TaskStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
+    RPCStatus, TaskStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest, EditLockManager
 
 
 class TaskManager:
@@ -26,13 +26,15 @@ class TaskManager:
 
             self.__logger.error('Unknown RPC request id')
 
-    def __init__(self, amqp_url: str, scenario_provider: ScenarioProvider, task_logger: TaskLogger):
+    def __init__(self, amqp_url: str, scenario_provider: ScenarioProvider, lock_manager: EditLockManager,
+                 task_logger: TaskLogger):
 
         self._tasks = {}
         self._requests = {}
         self._close_requests = {}
         self._closed_tasks = []
         self._scenario_provider = scenario_provider
+        self._lock_manager = lock_manager
         self._task_logger = task_logger
         self._rpc_manager = None
         self._amqp_url = amqp_url
@@ -48,7 +50,7 @@ class TaskManager:
         ok, msg = task.load(provider=self._scenario_provider)  # TODO ???
         if ok:
 
-            task.start()
+            task.start(self._lock_manager)
             rpc = self._rpc_manager.request(task.current_request(), task.payload)
 
             if rpc.status == RPCStatus.WAITING:
@@ -155,7 +157,7 @@ class TaskManager:
                     del self._requests[response.request_id]
                 else:
 
-                    task.next_step()
+                    task.next_step(self._lock_manager)
 
                     rpc = self._rpc_manager.request(task.current_request(), task.payload)
                     if rpc.status == RPCStatus.WAITING:
