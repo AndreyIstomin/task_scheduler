@@ -253,7 +253,6 @@ class RPCManager(RPCBase):
             Log.trace('RPC Server got task close notification')
             self._cmd_manager.cancel_close_request(cmd.request_id)
 
-
     def _run_server_async(self, io_loop) -> (bool, str):
 
         return False, 'Async consuming is not implemented'

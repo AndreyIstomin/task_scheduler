@@ -25,11 +25,18 @@ class Scenario:
         return self._steps[step]
 
     def __iter__(self):
-
         return self._steps.__iter__()
 
+    def _log(self): 
+        print('-' * 100)
+        print(f'Scenario {self.name()}')
+        print()
+        for step in self._steps:
+            print(step)
+        print('-' * 100)
 
-class InputType:
+
+class _InputType:
     CELLS = 0
     RECT = 1
 
@@ -39,14 +46,16 @@ class InputType:
         return ['cells', 'rect'][_type]
 
 
-class ScenarioProvider:
+class ScenarioProvider():
+
+    InputType = _InputType
 
     _type_name_map = {LANDSCAPE_OBJECT_TYPE.verbose(t): t for t in LANDSCAPE_OBJECT_TYPE}
     _subtype_name_map = {
         LANDSCAPE_OBJECT_TYPE.INFRASTRUCTURE_LINE: {IL_SUBTYPE.verbose(t): t for t in IL_SUBTYPE}
     }
 
-    _input_type_map = {'cells': InputType.CELLS, 'rect': InputType.RECT}
+    _input_type_map = {'cells': _InputType.CELLS, 'rect': _InputType.RECT}
 
     class ParseError(Exception):
         pass
@@ -56,8 +65,7 @@ class ScenarioProvider:
             self.type = input_type
 
         def __str__(self):
-
-            return f'input: {InputType.verbose(ScenarioProvider._input_type_map[self.type])}'
+            return f'input: {_InputType.verbose(self.type)}'
 
     class Run:
 
@@ -65,7 +73,6 @@ class ScenarioProvider:
             self.routing_key = routing_key
 
         def __str__(self):
-
             return f'run: {self.routing_key}'
 
     class LockCells:
@@ -93,10 +100,17 @@ class ScenarioProvider:
         def __str__(self):
             return 'unlock objects'
 
-    def __init__(self, path:str):
-        self._path = path
+    def __init__(self):
+        pass
 
-    def get_scenario(self, task_id) -> (Scenario, str):
+    def get_xml_data(self, task_id: int):
+        path = os.path.join(os.path.dirname(__file__), 'test/test_scenario_1.xml')
+        with open(path) as f:
+            xml_data = f.read()
+
+        return xml_data
+
+    def get_scenario(self, task_id: int) -> (Scenario, str):
         """
         Temp implementation
         """
@@ -110,8 +124,7 @@ class ScenarioProvider:
 
         steps = []
 
-        tree = ET.parse(self._path)
-        root = tree.getroot()
+        root = ET.fromstring(self.get_xml_data(task_id))
         if root.tag != 'scenario':
             return None, 'Scenario root tag must be "scenario"'
         if 'name' not in root.attrib:
@@ -151,7 +164,7 @@ class ScenarioProvider:
             if elem.attrib['type'] not in self._input_type_map:
                 raise(ScenarioProvider.ParseError(f'Unknown input type: {input_type}'))
 
-            steps.append(ScenarioProvider.Input(input_type))
+            steps.append(ScenarioProvider.Input(self._input_type_map[input_type]))
 
         elif elem.tag == 'run':
             steps.append(ScenarioProvider.Run(elem.text))
@@ -202,28 +215,5 @@ class ScenarioProvider:
 
         else:
             raise ScenarioProvider.ParseError(f'Unknown tag {elem.tag}')
-
-
-def test_scenario_provider():
-
-    path = os.path.join(os.path.dirname(__file__), 'test/test_scenario.xml')
-    provider = ScenarioProvider(path)
-    scenario, msg = provider.get_scenario(task_id=0)
-
-    if scenario:
-        print('-'*100)
-        print(f'Scenario {scenario.name()}')
-        print()
-        for step in scenario._steps:
-            print(step)
-        print('-' * 100)
-
-    else:
-        print(msg)
-
-
-if __name__ == '__main__':
-
-    test_scenario_provider()
 
 
