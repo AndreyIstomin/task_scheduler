@@ -46,7 +46,7 @@ class _InputType:
         return ['cells', 'rect'][_type]
 
 
-class ScenarioProvider():
+class ScenarioProvider:
 
     InputType = _InputType
 
