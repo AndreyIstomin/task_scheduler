@@ -3,6 +3,7 @@ import jsonschema
 import os
 import pprint
 import xml.etree.ElementTree as ET
+from abc import ABC, abstractmethod
 from PluginEngine import Log
 from PluginEngine.common import require
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
@@ -10,98 +11,148 @@ from LandscapeEditor.road.common import IL_SUBTYPE
 from backend.task_scheduler_service.schemas import SCENARIO_SCHEMA
 
 
-class Scenario:
-    def __init__(self, name: str, steps: 'list of strings'):
-        self._name = name
-        self._steps = steps
-
-    def step_count(self) -> int:
-        return len(self._steps)
-
-    def name(self):
-        return self._name
-
-    def get_request(self, step: int) -> str:
-        return self._steps[step]
-
-    def __iter__(self):
-        return self._steps.__iter__()
-
-    def _log(self): 
-        print('-' * 100)
-        print(f'Scenario {self.name()}')
-        print()
-        for step in self._steps:
-            print(step)
-        print('-' * 100)
+__all__ = ['ScenarioProviderBase', 'Scenario', 'CellLocker', 'ObjectLocker', 'Concurrent', 'Consequent', 'Run' ]
 
 
-class _InputType:
-    CELLS = 0
-    RECT = 1
+class ScenarioProviderBase:
+    class InputType:
+        CELLS = 0
+        RECT = 1
 
-    @staticmethod
-    def verbose(_type: int):
+        @staticmethod
+        def verbose(_type: int):
+            return ['cells', 'rect'][_type]
 
-        return ['cells', 'rect'][_type]
-
-
-class ScenarioProvider:
-
-    InputType = _InputType
-
-    _type_name_map = {LANDSCAPE_OBJECT_TYPE.verbose(t): t for t in LANDSCAPE_OBJECT_TYPE}
-    _subtype_name_map = {
+    type_name_map = {LANDSCAPE_OBJECT_TYPE.verbose(t): t for t in LANDSCAPE_OBJECT_TYPE}
+    subtype_name_map = {
         LANDSCAPE_OBJECT_TYPE.INFRASTRUCTURE_LINE: {IL_SUBTYPE.verbose(t): t for t in IL_SUBTYPE}
     }
 
-    _input_type_map = {'cells': _InputType.CELLS, 'rect': _InputType.RECT}
+    input_type_map = {'cells': InputType.CELLS, 'rect': InputType.RECT}
 
     class ParseError(Exception):
         pass
 
-    class Input:
-        def __init__(self, input_type):
-            self.type = input_type
 
-        def __str__(self):
-            return f'input: {_InputType.verbose(self.type)}'
-
-    class Run:
-
-        def __init__(self, routing_key: str):
-            self.routing_key = routing_key
-
-        def __str__(self):
-            return f'run: {self.routing_key}'
-
-    class LockCells:
-
-        def __init__(self, obj_type: int, obj_subtypes: list):
-            self.type = obj_type
-            self.subtypes = obj_subtypes
-
-        def __str__(self):
-            return f'lock cells: type {LANDSCAPE_OBJECT_TYPE.verbose(self.type)} ({", ".join(map(str, self.subtypes))})'
-
-    class UnlockCells:
-        def __str__(self):
-            return 'unlock cells'
-
-    class LockObjects:
-
-        def __init__(self, obj_types: list):
-            self.types = obj_types
-
-        def __str__(self):
-            return f'lock objects: {", ".join(LANDSCAPE_OBJECT_TYPE.verbose(t) for t in self.types)}'
-
-    class UnlockObjects:
-        def __str__(self):
-            return 'unlock objects'
+class Node:
 
     def __init__(self):
-        pass
+        self._children = []
+
+    def add_child(self, node: 'Node'):
+        self._children.append(node)
+
+    def children(self):
+        return self._children.__iter__()
+
+    def _properties_str(self):
+        return ''
+
+    def _name(self):
+        return self.__class__.__name__.lower()
+
+    def __str__(self):
+        name = self._name()
+        node_list = ',\n'.join(str(node) for node in self._children)
+        if node_list:
+            return f'<{name} {self._properties_str()}>\n{node_list}\n</{name}>'
+        else:
+            return f'<{name} {self._properties_str()}/>'
+
+
+class Scenario(Node):
+    def __init__(self, name: str):
+        Node.__init__(self)
+        self.name = name
+        self.input_type = None
+
+    def _properties_str(self):
+        return f'name="{self.name}", input={self.input_type}'
+
+
+class ResourceLocker:
+
+    def __init__(self):
+        self._object_types = []
+
+    @classmethod
+    def from_str(cls, text: str):
+
+        new_one = cls()
+        for item in text.split(';'):
+            if ':' in item:
+                type_, subtypes = item.split(':')
+                type_ = ScenarioProviderBase.type_name_map.get(type_.strip(' '), None)
+                if type_ is None:
+                    raise ScenarioProviderBase.ParseError(f'Unknown landscape object type {type_}')
+
+                try:
+                    subtypes = tuple(ScenarioProviderBase.subtype_name_map[type_][name.strip(' ')]
+                                     for name in subtypes.split(','))
+                except KeyError:
+                    raise ScenarioProviderBase.ParseError(f'Unknown landscape object subtype: {subtypes}')
+
+                new_one._object_types.append((type_, subtypes))
+            else:
+                type_ = ScenarioProviderBase.type_name_map.get(item.strip(' '), None)
+                if type_ is None:
+                    raise ScenarioProviderBase.ParseError(f'Unknown landscape object type {type_}')
+                new_one._object_types.append((type_, None))
+        return new_one
+
+
+class CellLocker(ResourceLocker):
+    def __str__(self):
+        text = 'lock cells: '
+        for type_, subtypes in self._object_types:
+            t = subtypes or ['all']
+            text += f'{LANDSCAPE_OBJECT_TYPE.verbose(type_)} ({", ".join(map(str, t))}), '
+        return text
+
+
+class ObjectLocker(ResourceLocker):
+    def __str__(self):
+        text = 'lock objects: '
+        for type_, subtypes in self._object_types:
+            text += f'{LANDSCAPE_OBJECT_TYPE.verbose(type_)} ({", ".join(map(str, subtypes))}), '
+        return text
+
+
+class GroupExecution(Node):
+
+    def __init__(self, locker=None):
+        Node.__init__(self)
+        self._locker = locker
+
+    def _properties_str(self):
+        if self._locker:
+            return f'locker="{self._locker}"'
+        else:
+            return ''
+
+
+class Consequent(GroupExecution):
+    pass
+
+
+class Concurrent(GroupExecution):
+    pass
+
+
+class Run(Node):
+
+    def __init__(self, routing_key: str):
+        Node.__init__(self)
+        self.routing_key = routing_key
+
+    def _properties_str(self):
+        return f'routing-key="{self.routing_key}"'
+
+
+class ScenarioProvider(ScenarioProviderBase):
+
+    def __init__(self):
+        self._has_root_group_execution = False
 
     def get_xml_data(self, task_id: int):
         path = os.path.join(os.path.dirname(__file__), 'test/test_scenario_1.xml')
@@ -122,98 +173,74 @@ class ScenarioProvider:
         # name = 'test_scenario'
         # json_data = json.dumps(steps)
 
-        steps = []
-
+        self._has_root_group_execution = False
         root = ET.fromstring(self.get_xml_data(task_id))
         if root.tag != 'scenario':
             return None, 'Scenario root tag must be "scenario"'
         if 'name' not in root.attrib:
-            return None, 'tag "name" is not specified in tag "scenario"'
+            return None, 'Attribute "name" is not specified in tag "scenario"'
 
-        name = root.attrib['name']
+        scenario = Scenario(root.attrib['name'])
 
         try:
             for child in root:
-                self._parse_tag(child, steps)
+                self._parse_tag(child, scenario)
         except ScenarioProvider.ParseError as err:
             return None, str(err)
 
-        return Scenario(name, steps), 'OK'
+        if scenario.input_type is None:
+            return None, 'Missing tag "input"'
 
-        # try:
-        #     steps = json.loads(json_data)
-        #     jsonschema.validate(steps, SCENARIO_SCHEMA)
-        #     sc = Scenario(name, steps)
-        # except json.JSONDecodeError as err:
-        #     return None, 'Invalid scenario JSON'
-        # except jsonschema.ValidationError as err:
-        #     return None, 'Incorrect scenario JSON format'
+        return scenario, 'OK'
 
-        # if sc.step_count() == 0:
-        #     return None, 'Empty scenario'
-        #
-        # return sc, 'Ok'
+    def _create_locker(self, attrib: dict):
 
-    def _parse_tag(self, elem: ET.Element, steps: list):
+        if 'lock_cells' in attrib:
+            return CellLocker.from_str(attrib['lock_cells'])
+        elif 'lock_objects' in attrib:
+            return ObjectLocker.from_str(attrib['lock_objects'])
+        else:
+            return None
+
+    def _parse_tag(self, elem: ET.Element, parent: Node):
 
         if elem.tag == 'input':
+
+            if not isinstance(parent, Scenario):
+                raise self.ParseError(f'Tag "input" may only be a child of the tag "scenario"')
+
             if 'type' not in elem.attrib:
-                raise(ScenarioProvider.ParseError('attribute "type" is not specified in tag "input"'))
-
+                raise self.ParseError('attribute "type" is not specified in tag "input"')
             input_type = elem.attrib['type']
-            if elem.attrib['type'] not in self._input_type_map:
-                raise(ScenarioProvider.ParseError(f'Unknown input type: {input_type}'))
+            if elem.attrib['type'] not in self.input_type_map:
+                raise self.ParseError(f'Unknown input type: {input_type}')
 
-            steps.append(ScenarioProvider.Input(self._input_type_map[input_type]))
+            parent.input_type = self.input_type_map[input_type]
+
+        elif elem.tag in ('concurrent', 'consequent'):
+
+            if not isinstance(parent, GroupExecution) and not isinstance(parent, Scenario):
+                raise self.ParseError(f'Group execution tag may only be a child of the tag "scenario" '
+                                      f'or another group execution tag')
+
+            if isinstance(parent, Scenario):
+                if not self._has_root_group_execution:
+                    self._has_root_group_execution = True
+                else:
+                    raise self.ParseError(f'Tag "scenario" may only has one group execution child')
+
+            new_one = Concurrent(self._create_locker(elem.attrib)) if elem.tag == 'concurrent'\
+                else Consequent(self._create_locker(elem.attrib))
+
+            for child in elem:
+                self._parse_tag(child, new_one)
+
+            parent.add_child(new_one)
 
         elif elem.tag == 'run':
-            steps.append(ScenarioProvider.Run(elem.text))
-
-        elif elem.tag == 'lock_cells':
-            if 'type' not in elem.attrib:
-                raise(ScenarioProvider.ParseError('attribute "type" is not specified in tag "lock_cells"'))
-
-            if elem.attrib['type'] not in self._type_name_map:
-                raise (ScenarioProvider.ParseError(f'unknown landscape object type {elem.attrib[type]}'))
-            obj_type = self._type_name_map[elem.attrib['type']]
-            obj_subtype = []
-            if 'subtype' in elem.attrib:
-                try:
-                    obj_subtype = [self._subtype_name_map[obj_type][text.strip(' ')]
-                                   for text in elem.attrib['subtype'].split(',')]
-                except KeyError:
-                    raise ScenarioProvider.ParseError(f'Incorrect subtype attribute: {elem.attrib["subtype"]}')
-
-            steps.append(ScenarioProvider.LockCells(obj_type, obj_subtype))
-
-            for child in elem:
-                self._parse_tag(child, steps)
-
-            steps.append(ScenarioProvider.UnlockCells())
-
-        elif elem.tag == 'lock_objects':
-            if 'type' not in elem.attrib:
-                raise ScenarioProvider.ParseError('attribute "type" is not specified in tag "lock_objects"')
-
-            if elem.attrib['type'] not in self._type_name_map:
-                raise ScenarioProvider.ParseError(f'Unknown landscape object type: {elem.attrib["type"]}')
-
-            obj_types = [self._type_name_map[text.strip(' ')] for text in elem.attrib['type'].split(',')]
-
-            steps.append(ScenarioProvider.LockObjects(obj_types))
-
-            for child in elem:
-                self._parse_tag(child, steps)
-
-            steps.append(ScenarioProvider.UnlockObjects())
-
-        elif elem.tag == 'parallel':
-            Log.warn('Scenario tag parallel is not currently supported')
-
-            for child in elem:
-                self._parse_tag(child, steps)
+            if not isinstance(parent, GroupExecution):
+                raise ScenarioProviderBase.ParseError(f'Tag "Run" may only be a child of the group execution tag')
+            parent.add_child(Run(elem.text))
 
         else:
             raise ScenarioProvider.ParseError(f'Unknown tag {elem.tag}')
-
-

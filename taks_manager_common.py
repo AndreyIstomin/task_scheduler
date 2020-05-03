@@ -1,5 +1,6 @@
 import time
 import uuid
+import asyncio
 from PluginEngine.common import require
 from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus, RPCData, EditLockManager
 
@@ -120,3 +121,9 @@ class CloseRequest:
     def mock_rpc(self) -> RPCData:
         return RPCData(self.__mock_rpc_uuid, 'Close request', self.progress, self.status, self.message)
 
+
+class AsyncScenarioExecutor:
+
+    def __init__(self, task: Task, queue: asyncio.Queue):
+        self._task = task
+        self._queue = queue

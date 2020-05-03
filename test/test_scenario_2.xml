@@ -1,0 +1,16 @@
+<?xml version="1.1" encoding="UTF-8" ?>
+<scenario name="test_scenario_2">
+    <input type="rect"/>
+    <consequent>
+        <concurrent>
+            <run>road_import_osm</run>
+            <run>powerline_import_osm</run>
+            <run>fence_import_osm</run>
+        </concurrent>
+        <concurrent lock_cells="infrastructure_line:road, powerline, fence;tree">
+            <run>road_generator</run>
+            <run>powerline_generator</run>
+            <run>fence_generator</run>
+        </concurrent>
+    </consequent>
+</scenario>
