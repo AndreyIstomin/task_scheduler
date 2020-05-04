@@ -1,20 +1,6 @@
 from abc import ABC, abstractmethod
 from PluginEngine.quadtree import QCell
-
-
-class EditLockManagerInterface(ABC):
-
-    @abstractmethod
-    def sync(self):
-        pass
-
-    @abstractmethod
-    def get_affected_cells(self, obj_type=None, obj_subtype=None) -> 'AffectedCells object':
-        pass
-
-    @abstractmethod
-    def get_affected_objects(self, obj_type):
-        pass
+from backend.task_scheduler_service.common import EditLockManagerInterface
 
 
 class AffectedCells:

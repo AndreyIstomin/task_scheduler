@@ -17,13 +17,6 @@ RUN_TASK_SCHEMA = {
     "required": ["username", "task_id"]
 }
 
-SCENARIO_SCHEMA = {
-    "$schema": "http://json-schema.org/schema#",
-    "type": "array",
-    "items": {
-        "type": "string"
-    }
-}
 
 RESPONSE_SCHEMA = {
     "$schema": "http://json-schema.org/schema#",

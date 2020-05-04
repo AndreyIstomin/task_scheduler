@@ -3,7 +3,7 @@ import json
 import pika
 from functools import wraps
 from PluginEngine import Log, ProgressInterface
-from PluginEngine.common import require
+from PluginEngine.asserts import require
 from LandscapeEditor.backend import RPCConsumerInterface, GeneratorInterface, CloseRequestException
 from backend.task_scheduler_service import ResponseObject, ResponseStatus
 from backend.task_scheduler_service.rpc_common import RPCBase, CMDHandler
@@ -12,10 +12,9 @@ from backend.generator_service import create_client_notifier, create_db_handler
 
 class RPCConsumerInput:
 
-    def __init__(self, amqp_url: str, heartbit_timeout: 'seconds', instance_id: int, cmd_handler: CMDHandler):
+    def __init__(self, amqp_url: str, instance_id: int, cmd_handler: CMDHandler):
 
         self.amqp_url = amqp_url
-        self.heartbit_timeout = heartbit_timeout
         self.instance_id = instance_id
         self.cmd_handler = cmd_handler
 
@@ -138,6 +137,11 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
         self._failed = True
         self._err_message = err_message
+
+    @classmethod
+    def heartbit_timeout(cls):
+        raise NotImplementedError
+
 
 #  Protected ###########################################################################################################
 
@@ -267,11 +271,12 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
 class GeneratorAdapter(RPCConsumer):
 
-    def __init_subclass__(cls, generator_class: type, raise_on_close_request: bool):
+    def __init_subclass__(cls, generator_class: type, raise_on_close_request: bool, heartbit_timeout: int):
 
         require(issubclass(generator_class, GeneratorInterface))
 
         cls.__generator = generator_class
+        cls.__heartbit_timeout = heartbit_timeout
         cls._raise_on_close_request = raise_on_close_request
 
         super(GeneratorAdapter, cls).__init_subclass__()
@@ -282,6 +287,10 @@ class GeneratorAdapter(RPCConsumer):
             create_client_notifier(self._payload['username'],  self.__generator.process_name()),
             create_db_handler(), self._payload, self)
         generator._run()
+
+    @classmethod
+    def heartbit_timeout(cls):
+        return cls.__heartbit_timeout
 
 
 

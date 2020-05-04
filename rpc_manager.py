@@ -6,10 +6,11 @@ import jsonschema
 import pika
 from multiprocessing import Process, Value
 from PluginEngine import Log
-from PluginEngine.common import require, empty_uuid
+from PluginEngine.common import empty_uuid
+from PluginEngine.asserts import require
 from backend.task_scheduler_service import SchedulerAsyncPublisher, SchedulerAsyncConsumer, RPCConsumerInput
 from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
-from backend.task_scheduler_service.rpc_common import RPCBase, RPCData, RPCStatus, RPCErrorCallbackInterface, \
+from backend.task_scheduler_service.rpc_common import RPCBase, RPCRegistry, RPCData, RPCStatus, RPCErrorCallbackInterface, \
     RPCManagerCMD, CMDManager, CMDHandler, CMDHandlerMock, CMDType
 
 
@@ -20,7 +21,7 @@ class RPCConsumerData:
         self.instance_count = instance_count
 
 
-class RPCManager(RPCBase):
+class RPCManager(RPCRegistry):
 
     SERVER = 0
     CLIENT = 1
@@ -31,7 +32,7 @@ class RPCManager(RPCBase):
         def __init__(self):
             pass
 
-    def __init__(self, regime, amqp_url: str, heart_bit_timeout: 'seconds', reply_callback=None,
+    def __init__(self, regime, amqp_url: str, reply_callback=None,
                  error_callback=None):
 
         require(regime in [RPCManager.SERVER, RPCManager.CLIENT])
@@ -42,7 +43,6 @@ class RPCManager(RPCBase):
         # Common variables
         self._regime = regime
         self._running = False
-        self._heart_bit_timeout = heart_bit_timeout
         self._io_loop = None
         self._amqp_url = amqp_url
 
@@ -184,7 +184,7 @@ class RPCManager(RPCBase):
                     target=RPCManager._run_consumer,
                     args=(self._known_consumers[consumer_data.routing_key],
                           RPCConsumerInput(
-                              self._amqp_url, self._heart_bit_timeout, instance_id,
+                              self._amqp_url, instance_id,
                               self._cmd_manager.create_cmd_handler(process_id=len(self._processes)))))
 
                 self._processes.append(process)

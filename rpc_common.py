@@ -15,10 +15,11 @@ from enum import Enum
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection, wait
 from PluginEngine import Log
-from PluginEngine.common import require, empty_uuid
-from backend.task_scheduler_service import Scenario
+from PluginEngine.common import empty_uuid
+from PluginEngine.asserts import require
 from backend.task_scheduler_service.common import ResponseObject, shorten_uuid
 from backend.task_scheduler_service.schemas import CMD_MESSAGE_SCHEMA
+from backend.task_scheduler_service.scenario_common import Scenario, ExecutableNode, Run
 
 
 class CMDTypeEnum:
@@ -84,7 +85,6 @@ class CMDHandler:
         self._task_started = False
         self._close_requested = False
         self._task_uuid = empty_uuid
-        pass
 
     def try_open_task(self, task_uuid: uuid.UUID) -> bool:
         """
@@ -318,10 +318,15 @@ class RPCBase:
 
     EXCHANGE = 'rpc_manager_exchange'
     CMD_EXCHANGE = 'rpc_manager_cmd_exchange'
-    # CMD_QUEUE = ''
     CMD_ROUTING_KEY = 'rpc_manager_cmd'
 
     PREFETCH_COUNT = 1
+
+
+class RPCRegistry(RPCBase):
+
+    class UnknownRoutingKeyError(Exception):
+        pass
 
     _known_consumers = {}
 
@@ -343,12 +348,23 @@ class RPCBase:
         return register
 
     @classmethod
-    def check_scenario(cls, scenario: 'Scenario') -> (bool, str):
+    def check_scenario(cls, scenario: Scenario) -> (bool, str):
 
-        error_msg = ','.join(request for request in scenario if request not in cls._known_consumers)
+        def check_routing_key_is_known(node: ExecutableNode):
+            if isinstance(node, Run) and node.routing_key not in cls._known_consumers:
+                raise cls.UnknownRoutingKeyError(node.routing_key)
+            for child in node:
+                check_routing_key_is_known(child)
+        try:
+            check_routing_key_is_known(scenario)
+        except cls.UnknownRoutingKeyError as err:
+            return False, f'Unknown routing key: {err}'
 
-        ok = error_msg == ''
-        return ok, 'Ok' if ok else f'Incorrect scenario {scenario.name()}, unknown requests: ' + error_msg
+        return True, 'Ok'
+
+    @classmethod
+    def heartbit_timeout(cls, routing_key: str):
+        return cls._known_consumers[routing_key].heartbit_timeout()
 
 
 class ReplyCallbackInterface:
@@ -387,14 +403,10 @@ class RPCData:
         self.progress = progress
         self.status = status
         self.message = message
-        self._heartbit_time = None
 
-    def update_heartbit_time(self):
-
+    def set_in_progress(self):
         if self.status is RPCStatus.WAITING:
             self.status = RPCStatus.IN_PROGRESS
-
-        self._heartbit_time = time.time()
 
     def set_completed(self):
         self.status = RPCStatus.COMPLETED

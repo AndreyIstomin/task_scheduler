@@ -3,11 +3,7 @@ import json
 import jsonschema
 import aiohttp_jinja2
 from datetime import datetime
-# from aiohttp_session import get_session
 from aiohttp import web
-# from auth.models import User
-# from chat.models import Message
-# from settings import log
 
 from PluginEngine import Log
 from backend.task_scheduler_service.rpc_common import CMDType

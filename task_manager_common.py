@@ -1,23 +1,34 @@
 import time
 import uuid
 import asyncio
-from PluginEngine.common import require
-from backend.task_scheduler_service import ScenarioProvider, RPCBase, RPCStatus, RPCData, EditLockManager
+from PluginEngine.asserts import require
+from backend.task_scheduler_service import ScenarioProvider, RPCRegistry, RPCStatus, RPCData
+from backend.task_scheduler_service.common import TaskManagerInterface, TaskInterface
+# from backend.task_scheduler_service.rpc_common import RPCBase, RPCStatus, RPCData
 
 
 TaskStatus = RPCStatus
 
 
-class Task:
-
-    def __init__(self, task_uuid: uuid.UUID, task_id: int, payload: dict):
+class Task(TaskInterface):
+    """
+    Provide access to the task's context: state, payload, running task manager, etc.
+    """
+    def __init__(self, task_uuid: uuid.UUID, task_id: int, payload: dict, task_manager: TaskManagerInterface):
 
         self._uuid = task_uuid
         self._task_id = task_id
         self._scenario = None
         self._valid = False
         self._curr_step = None
-        self.payload = payload
+        self._payload = payload
+        self._task_manager = task_manager
+
+    def task_manager(self):
+        return self._task_manager
+
+    def payload(self):
+        return self._payload
 
     def uuid(self):
         return self._uuid
@@ -33,16 +44,13 @@ class Task:
             self._valid = False
             return False, msg
 
-        ok, msg = RPCBase.check_scenario(self._scenario)
+        ok, msg = RPCRegistry.check_scenario(self._scenario)
         if not ok:
             return False, msg
 
         self._valid = True
         self._curr_step = 0
         return True, 'Ok'
-
-    def start(self, lock_manager: EditLockManager):
-        self._curr_step = 0
 
     def current_request(self) -> str:
         require(self._valid)
@@ -54,15 +62,6 @@ class Task:
     def has_next_step(self):
         return self._curr_step < self._scenario.step_count() - 1
 
-    def next_step(self, lock_manager: EditLockManager) -> bool:
-        require(self._valid)
-        require(self._scenario)
-        if self._curr_step < self._scenario.step_count():
-            self._curr_step += 1
-            return True
-        else:
-            return False
-
     def unroll(self):
         require(self._valid)
         return True
@@ -73,20 +72,31 @@ class Task:
 
     def name(self):
         if self._scenario:
-            return self._scenario.name()
+            return self._scenario.name
+
+    #  Async def's
+    async def run(self):
+        """
+        Executes asynchronously the task's scenario
+        """
+        require(self._valid)
+        await self._scenario.execute(self)
 
 
 class TaskData:
 
-    def __init__(self):
-        self.task = None
+    def __init__(self, task: Task):
+        self.task = task
         self.requests = []
-        self.status = TaskStatus.INACTIVE
+        self._status = TaskStatus.INACTIVE
         self.message = ''
+
+    def status(self):
+        return self._status
 
     def set_status(self, status: 'TaskStatus', msg=None):
 
-        self.status = status
+        self._status = status
         self.message = msg or TaskStatus.verbose(status)
 
 

@@ -20,7 +20,7 @@ async def run_task(request):
     except jsonschema.ValidationError as err:
         return web.Response(status=web.HTTPBadRequest.status_code, text=str(err))
 
-    ok, msg = task_manager.start_task(task_id=data['task_id'], payload=data)
+    ok, msg = await task_manager.start_task(task_id=data['task_id'], payload=data)
 
     if ok:
         return web.Response(status=web.HTTPOk.status_code, text=f"Task {data['task_id']} has been created by {data['username']}")

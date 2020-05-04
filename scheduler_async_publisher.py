@@ -6,8 +6,6 @@ import logging
 import json
 import uuid
 import pika
-from PluginEngine import Log
-from PluginEngine.common import require
 from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer
 
 

@@ -26,7 +26,7 @@ def task_descriptor(task_data: TaskData):
         'type': EventType.TASK,
         'uuid': str(task_data.task.uuid()),
         'name': task_data.task.name(),
-        'status': task_data.status,
+        'status': task_data.status(),
         'message': task_data.message,
         'steps': list(map(step_descriptor, task_data.requests))
     }

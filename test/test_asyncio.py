@@ -66,7 +66,28 @@ async def test_asyncio_queue():
     await task_1
     await task_2
 
+
+async def test_exception():
+
+    loop = asyncio.get_running_loop()
+
+    async def coro_1():
+        await asyncio.sleep(2)
+        print("coro_1 is ready")
+
+    async def coro_2(task_1: asyncio.Task):
+        await asyncio.sleep(1)
+        if not task_1.cancelled():
+            task_1.cancel()
+        # raise Exception('Hello')
+
+    task_1 = asyncio.create_task(coro_1())
+    task_2 = asyncio.create_task(coro_2(task_1))
+
+    print(await asyncio.gather(task_1, task_2, return_exceptions=False))
+
 if __name__ == '__main__':
 
     # asyncio.run(test_future())
-    asyncio.run(test_asyncio_queue())
+    # asyncio.run(test_asyncio_queue())
+    asyncio.run(test_exception())

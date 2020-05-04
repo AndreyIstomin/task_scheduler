@@ -4,13 +4,14 @@ Static initialisation of RPC consumers
 import time
 import pika
 from LandscapeEditor.road import RoadGenerator
-from backend.task_scheduler_service import RPCBase, GeneratorAdapter, ResponseObject, RPCConsumer
+from backend.task_scheduler_service import RPCRegistry, GeneratorAdapter, ResponseObject, RPCConsumer
 
 __all__ = ['RPCRoadGenerator', 'TestConsumerA', 'TestConsumerB', 'TestConsumerC']
 
 
-@RPCBase.is_consumer('road_generator')
-class RPCRoadGenerator(GeneratorAdapter, generator_class=RoadGenerator, raise_on_close_request=True):
+@RPCRegistry.is_consumer('road_generator')
+class RPCRoadGenerator(GeneratorAdapter, generator_class=RoadGenerator, raise_on_close_request=True,
+                       heartbit_timeout=5):
     pass
 
 
@@ -38,18 +39,22 @@ class TestRPCConsumer(RPCConsumer):
 
         self.notify_task_completed(f"The {self.instance_id()}th {self.get_routing_key()} completed the task")
 
+    @classmethod
+    def heartbit_timeout(cls):
+        return 5
 
-@RPCBase.is_consumer('consumer_A')
+
+@RPCRegistry.is_consumer('consumer_A')
 class TestConsumerA(TestRPCConsumer, step_time_ms=7, raise_on_close_req=True):
     pass
 
 
-@RPCBase.is_consumer('consumer_B')
+@RPCRegistry.is_consumer('consumer_B')
 class TestConsumerB(TestRPCConsumer, step_time_ms=10, raise_on_close_req=True):
     pass
 
 
-@RPCBase.is_consumer('invalid_response')
+@RPCRegistry.is_consumer('invalid_response')
 class TestConsumerC(TestRPCConsumer):
 
     def _publish_response(self, response: ResponseObject):

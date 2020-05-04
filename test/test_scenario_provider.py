@@ -1,10 +1,8 @@
 import os
 import unittest
 from unittest.mock import MagicMock
-from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
-from LandscapeEditor.road.common import IL_SUBTYPE
 from backend.task_scheduler_service import ScenarioProvider
-from backend.task_scheduler_service.scenario_provider import *
+from backend.task_scheduler_service.scenario_common import *
 
 
 class ScenarioProviderTestCase(unittest.TestCase):

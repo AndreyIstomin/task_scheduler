@@ -1,7 +1,5 @@
-import sys
 import logging
 import argparse
-from PluginEngine import Log
 from backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service import RPCManager
 
@@ -14,9 +12,6 @@ def parse_input() -> dict:
     parser = argparse.ArgumentParser(description='Starts RPC server (a pool of specified consumers and a controller')
     parser.add_argument('--consumers', '-c', type=str, nargs='+', required=True,
                         help='list of pairs (known consumer )')
-    # parser.add_argument('--log_level', '-l', required=False, type=str,
-    #                     help='trace, debug, info, warning, error; default: info;')
-
     args = parser.parse_args()
 
     result = {}
@@ -39,8 +34,7 @@ def parse_input() -> dict:
 def test_rpc_server():
 
     consumers = parse_input()
-    manager = RPCManager(regime=RPCManager.SERVER, amqp_url=SERVICE_CONFIG['task_scheduler_service']['amqp_url'],
-                         heart_bit_timeout=5)
+    manager = RPCManager(regime=RPCManager.SERVER, amqp_url=SERVICE_CONFIG['task_scheduler_service']['amqp_url'])
     for name, count in consumers.items():
         manager.add_consumer(name, count)
     manager.run()

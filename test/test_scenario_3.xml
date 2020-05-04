@@ -1,0 +1,16 @@
+<?xml version="1.1" encoding="UTF-8" ?>
+<scenario name="test_scenario_2">
+    <input type="rect"/>
+    <consequent>
+        <consequent>
+            <run>consumer_A</run>
+            <run>consumer_B</run>
+            <run>consumer_B</run>
+        </consequent>
+        <concurrent lock_cells="infrastructure_line:road, powerline, fence;tree">
+            <run>consumer_A</run>
+            <run>consumer_A</run>
+            <run>consumer_B</run>
+        </concurrent>
+    </consequent>
+</scenario>
