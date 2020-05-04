@@ -105,7 +105,7 @@ class ExecutableNode:
         else:
             return f'<{name} {self._properties_str()}/>'
 
-    async def execute(self, task: TaskInterface):
+    async def execute(self, task: TaskInterface) -> bool:
         raise NotImplementedError
 
 
@@ -122,6 +122,8 @@ class Scenario(ExecutableNode):
         require(len(self._children) == 1, 'Multiple group execution nodes in root')
         for child in self:
             await child.execute(task)
+
+        task.task_manager().notify_task_closed(task.uuid())
 
 
 class GroupExecution(ExecutableNode):
@@ -145,7 +147,10 @@ class Consequent(GroupExecution):
     async def execute(self, task: TaskInterface):
         # TODO: run locker if need
         for child in self:
-            await child.execute(task)
+            if not await child.execute(task):
+                return False
+
+        return True
 
 
 class Concurrent(GroupExecution):
@@ -153,7 +158,9 @@ class Concurrent(GroupExecution):
     async def execute(self, task: TaskInterface):
         # TODO: run locker if need
         threads = list(item.execute(task) for item in self)
-        await asyncio.gather(*threads)
+        result = await asyncio.gather(*threads)
+
+        return False not in result
 
 
 class Run(ExecutableNode):
@@ -166,4 +173,4 @@ class Run(ExecutableNode):
         return f'routing-key="{self.routing_key}"'
 
     async def execute(self, task: TaskInterface):
-        await task.task_manager().run_request(task.uuid(), self.routing_key, task.payload())
+        return await task.task_manager().run_request(task.uuid(), self.routing_key, task.payload())

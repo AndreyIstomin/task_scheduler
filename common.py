@@ -70,13 +70,17 @@ class TaskManagerInterface(ABC):
     """
     Max wait time for scenario step to start, seconds
     """
-    START_TIMEOUT = 60
+    START_TIMEOUT = 3600
 
     class ExecutionError(Exception):
         pass
 
     @abstractmethod
     def run_request(self, task_uuid: uuid.UUID, routing_key: str, payload: dict):
+        pass
+
+    @abstractmethod
+    def notify_task_closed(self, task_uuid: uuid.UUID):
         pass
 
 

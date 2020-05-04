@@ -4,7 +4,7 @@ import asyncio
 from PluginEngine.asserts import require
 from backend.task_scheduler_service import ScenarioProvider, RPCRegistry, RPCStatus, RPCData
 from backend.task_scheduler_service.common import TaskManagerInterface, TaskInterface
-# from backend.task_scheduler_service.rpc_common import RPCBase, RPCStatus, RPCData
+from backend.task_scheduler_service.rpc_common import shorten_uuid
 
 
 TaskStatus = RPCStatus
@@ -20,7 +20,6 @@ class Task(TaskInterface):
         self._task_id = task_id
         self._scenario = None
         self._valid = False
-        self._curr_step = None
         self._payload = payload
         self._task_manager = task_manager
 
@@ -49,26 +48,7 @@ class Task(TaskInterface):
             return False, msg
 
         self._valid = True
-        self._curr_step = 0
         return True, 'Ok'
-
-    def current_request(self) -> str:
-        require(self._valid)
-        require(self._scenario)
-        if self._curr_step == self._scenario.step_count():
-            return None
-        return self._scenario.get_request(self._curr_step)
-
-    def has_next_step(self):
-        return self._curr_step < self._scenario.step_count() - 1
-
-    def unroll(self):
-        require(self._valid)
-        return True
-
-    def close(self):
-        require(self._valid)
-        return True
 
     def name(self):
         if self._scenario:
@@ -90,14 +70,30 @@ class TaskData:
         self.requests = []
         self._status = TaskStatus.INACTIVE
         self.message = ''
+        self.close_requested = False
 
     def status(self):
         return self._status
 
-    def set_status(self, status: 'TaskStatus', msg=None):
+    def set_waiting(self):
+        if self._status <= TaskStatus.WAITING:
+            self._status = TaskStatus.WAITING
 
-        self._status = status
-        self.message = msg or TaskStatus.verbose(status)
+    def set_in_progress(self):
+        if self._status <= TaskStatus.IN_PROGRESS:
+            self._status = TaskStatus.IN_PROGRESS
+
+    def set_completed(self):
+        require(self._status != TaskStatus.FAILED)
+        self._status = TaskStatus.COMPLETED
+
+    def set_failed(self, msg=None):
+        require(self._status != TaskStatus.COMPLETED)
+        self._status = TaskStatus.FAILED
+        self.message = msg or TaskStatus.verbose(TaskStatus.FAILED)
+
+    def __str__(self):
+        return f'task: {shorten_uuid(self.task.uuid())}: {TaskStatus.verbose(self._status)}'
 
 
 class CloseRequest:
