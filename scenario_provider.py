@@ -12,7 +12,7 @@ class ScenarioProvider(ScenarioProviderBase):
         self._has_root_group_execution = False
 
     def get_xml_data(self, task_id: int):
-        path = os.path.join(os.path.dirname(__file__), 'test/test_scenario_4.xml')
+        path = os.path.join(os.path.dirname(__file__), 'test/test_scenario_3.xml')
         with open(path) as f:
             xml_data = f.read()
 

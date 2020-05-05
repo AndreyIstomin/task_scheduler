@@ -5,7 +5,7 @@ from .scheduler_async_publisher import SchedulerAsyncPublisher, SchedulerAsyncCo
 from .rpc_common import ReplyCallbackInterface, RPCErrorCallbackInterface, RPCStatus, RPCData, RPCRegistry
 from .scenario_provider import Scenario, ScenarioProvider
 from .task_manager_common import TaskStatus, Task, TaskData, CloseRequest
-from .edit_lock_manager import EditLockManager, AffectedCells, AffectedObjects
+from .edit_lock_manager import EditLockManager, LockedCells, LockedObjects
 from .rpc_consumer import RPCConsumer, GeneratorAdapter, RPCConsumerInput
 from .rpc_manager import RPCManager
 from .task_logger import TaskLogger

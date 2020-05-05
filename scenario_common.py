@@ -1,8 +1,9 @@
 import asyncio
+from PluginEngine import Log
 from PluginEngine.asserts import require
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
 from LandscapeEditor.road.common import IL_SUBTYPE
-from backend.task_scheduler_service.common import TaskInterface
+from backend.task_scheduler_service.common import TaskInterface, EditLockManagerInterface
 
 
 __all__ = ["ScenarioProviderBase", "CellLocker", "ObjectLocker", "ExecutableNode", "Scenario", "GroupExecution",
@@ -33,6 +34,9 @@ class ResourceLocker:
 
     def __init__(self):
         self._object_types = []
+        self._lock = None
+        self._active = False
+        self._current_task = None
 
     @classmethod
     def from_str(cls, text: str):
@@ -59,6 +63,29 @@ class ResourceLocker:
                 new_one._object_types.append((type_, None))
         return new_one
 
+    def _add_locked_data(self):
+        pass
+
+    def _remove_locked_data(self, result: bool):
+        pass
+
+    def begin(self, task: TaskInterface):
+        require(not self._active)
+        self._active = True
+        self._current_task = task
+        self._add_locked_data()
+
+    def end(self, result: bool):
+        require(self._active)
+        self._active = False
+        self._remove_locked_data(result)
+        self._lock = None
+        self._current_task = None
+
+
+class DummyLocker(ResourceLocker):
+    pass
+
 
 class CellLocker(ResourceLocker):
     def __str__(self):
@@ -68,6 +95,14 @@ class CellLocker(ResourceLocker):
             text += f'{LANDSCAPE_OBJECT_TYPE.verbose(type_)} ({", ".join(map(str, t))}), '
         return text
 
+    def _add_locked_data(self):
+        self._lock = self._current_task.task_manager().lock_manager().get_affected_cells(self._object_types)
+        self._current_task.add_cells(self._lock)
+
+    def _remove_locked_data(self, result: bool):
+        self._current_task.remove_cells(self._lock)
+        self._lock.unlock(result)
+
 
 class ObjectLocker(ResourceLocker):
     def __str__(self):
@@ -75,6 +110,18 @@ class ObjectLocker(ResourceLocker):
         for type_, subtypes in self._object_types:
             text += f'{LANDSCAPE_OBJECT_TYPE.verbose(type_)} ({", ".join(map(str, subtypes))}), '
         return text
+
+    def _add_locked_data(self):
+        for obj_type, obj_subtypes in self._object_types:
+            lock = self._current_task.task_manager().lock_manager().get_affected_objects(obj_type, obj_subtypes)
+            if not lock.empty():
+                self._current_task.add_objects(lock)
+                self._locks.append(lock)
+
+    def _remove_locked_data(self, result: bool):
+        for lock in self._locks:
+            self._current_task.remove_objects(lock)
+            lock.unlock(result)
 
 
 class ExecutableNode:
@@ -130,10 +177,10 @@ class GroupExecution(ExecutableNode):
 
     def __init__(self, locker=None):
         ExecutableNode.__init__(self)
-        self._locker = locker
+        self._locker = locker or DummyLocker()
 
     def _properties_str(self):
-        if self._locker:
+        if self._locker and not isinstance(self._locker, DummyLocker):
             return f'locker="{self._locker}"'
         else:
             return ''
@@ -145,22 +192,32 @@ class GroupExecution(ExecutableNode):
 class Consequent(GroupExecution):
 
     async def execute(self, task: TaskInterface):
-        # TODO: run locker if need
-        for child in self:
-            if not await child.execute(task):
-                return False
 
+        result = False
+        try:
+            self._locker.begin(task)
+            for child in self:
+                if not await child.execute(task):
+                    result = False
+                    return False
+        finally:
+            self._locker.end(result)
         return True
 
 
 class Concurrent(GroupExecution):
 
     async def execute(self, task: TaskInterface):
-        # TODO: run locker if need
-        threads = list(item.execute(task) for item in self)
-        result = await asyncio.gather(*threads)
+        result = False
+        try:
+            self._locker.begin(task)
+            threads = list(item.execute(task) for item in self)
+            result = False not in await asyncio.gather(*threads)
 
-        return False not in result
+        finally:
+            self._locker.end(result)
+
+        return result
 
 
 class Run(ExecutableNode):

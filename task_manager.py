@@ -4,8 +4,8 @@ from collections import namedtuple
 from PluginEngine import Log
 from PluginEngine.asserts import require
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
-    RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest, EditLockManager
-from backend.task_scheduler_service.common import TaskManagerInterface
+    RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
+from backend.task_scheduler_service.common import TaskManagerInterface, EditLockManagerInterface
 
 
 RequestData = namedtuple('RequestData', 'task_uuid, queue')
@@ -31,7 +31,7 @@ class TaskManager(TaskManagerInterface):
 
             self.__logger.error('Unknown RPC request id')
 
-    def __init__(self, amqp_url: str, scenario_provider: ScenarioProvider, lock_manager: EditLockManager,
+    def __init__(self, amqp_url: str, scenario_provider: ScenarioProvider, lock_manager: EditLockManagerInterface,
                  task_logger: TaskLogger):
 
         self._tasks = {}
@@ -97,12 +97,11 @@ class TaskManager(TaskManagerInterface):
 
             except asyncio.TimeoutError as err:
                 # The place for request's thread termination
-                rpc.set_failed()
+                # rpc.set_failed()
                 rpc.message = f'heartbit timeout {timeout} seconds has been reached'
-                task_data.set_failed()
+                # task_data.set_failed()
                 self.request_stop_task(task_uuid, payload['username'])
-
-                return False
+                continue
 
             finally:
                 self.process_close_requests(rpc)
@@ -122,7 +121,7 @@ class TaskManager(TaskManagerInterface):
     async def start_task(self, task_id: int, payload: dict):
 
         task_uuid = uuid.uuid4()
-        task = Task(task_uuid, task_id, payload, task_manager=self)
+        task = Task(task_uuid, task_id, payload, task_manager=self, lock_manager=self._lock_manager)
         ok, msg = task.load(provider=self._scenario_provider)  # TODO ???
         if ok:
             self._tasks[task_uuid] = TaskData(task)
@@ -230,6 +229,9 @@ class TaskManager(TaskManagerInterface):
                                        error_callback=self.ErrorCallbackHandler(self._task_logger))
 
         self._rpc_manager.run_async(io_loop)
+
+    def lock_manager(self) -> EditLockManagerInterface:
+        return self._lock_manager
 
     def _log_close_requests_info(self, log_level=Log.TRACE):
          Log.log_message(log_level, log_type=Log.CONSOLE, message='''

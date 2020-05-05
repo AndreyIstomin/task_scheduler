@@ -3,7 +3,8 @@ import uuid
 import asyncio
 from PluginEngine.asserts import require
 from backend.task_scheduler_service import ScenarioProvider, RPCRegistry, RPCStatus, RPCData
-from backend.task_scheduler_service.common import TaskManagerInterface, TaskInterface
+from backend.task_scheduler_service.common import TaskManagerInterface, TaskInterface, LockedData, \
+    EditLockManagerInterface
 from backend.task_scheduler_service.rpc_common import shorten_uuid
 
 
@@ -14,7 +15,8 @@ class Task(TaskInterface):
     """
     Provide access to the task's context: state, payload, running task manager, etc.
     """
-    def __init__(self, task_uuid: uuid.UUID, task_id: int, payload: dict, task_manager: TaskManagerInterface):
+    def __init__(self, task_uuid: uuid.UUID, task_id: int, payload: dict, task_manager: TaskManagerInterface,
+                 lock_manager: EditLockManagerInterface):
 
         self._uuid = task_uuid
         self._task_id = task_id
@@ -22,6 +24,7 @@ class Task(TaskInterface):
         self._valid = False
         self._payload = payload
         self._task_manager = task_manager
+        self._lock_manager = lock_manager
 
     def task_manager(self):
         return self._task_manager
@@ -53,6 +56,20 @@ class Task(TaskInterface):
     def name(self):
         if self._scenario:
             return self._scenario.name
+
+    def add_cells(self, locke_cells: LockedData):
+        pass
+
+    def remove_cells(self, cells: LockedData):
+        pass
+
+    def add_objects(self, objects: LockedData):
+        pass
+
+    def remove_objects(self, objects: LockedData):
+        pass
+
+    # add_objects, lock_manager, remove_cells, remove_objects
 
     #  Async def's
     async def run(self):

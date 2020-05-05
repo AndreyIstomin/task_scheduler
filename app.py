@@ -3,7 +3,9 @@ import jsonschema
 import jinja2
 import aiohttp_jinja2
 from aiohttp import web
+from PluginEngine import UseDatabase
 from backend.config import SERVICE_CONFIG
+from backend.generator_service import create_db_handler
 from backend.task_scheduler_service import ScenarioProvider, TaskManager, TaskLogger, EditLockManager
 from backend.task_scheduler_service.schemas import RUN_TASK_SCHEMA
 from backend.task_scheduler_service.routes import routes
@@ -81,18 +83,33 @@ def init():
 
 
 if __name__ == '__main__':
+    db_handler = create_db_handler()
+    test_history_table = 't_edit_history_transient'
+    try:
+        the_app = init()
+        logger = TaskLogger(the_app)
 
-    the_app = init()
-    logger = TaskLogger(the_app)
+        scenario_provider = ScenarioProvider()
+        edit_lock_manager = EditLockManager(db_handler)
+        edit_lock_manager._table[0] = test_history_table
 
-    scenario_provider = ScenarioProvider()
-    edit_lock_manager = EditLockManager()
-    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider,
-                               edit_lock_manager, logger)
-    task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
+        with UseDatabase(db_handler.connection_config()) as cursor:
+            _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
+            cursor.execute(_SQL)
+            _SQL = f"""CREATE TABLE {test_history_table} AS TABLE edit_history_transient"""
+            cursor.execute(_SQL)
 
-    the_app['task_manager'] = task_manager  # xz xz ...
+        task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider,
+                                   edit_lock_manager, logger)
+        task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
 
-    web.run_app(the_app,
-                host=SERVICE_CONFIG['task_scheduler_service']['IP'],
-                port=SERVICE_CONFIG['task_scheduler_service']['port'])
+        the_app['task_manager'] = task_manager  # xz xz ...
+
+        web.run_app(the_app,
+                    host=SERVICE_CONFIG['task_scheduler_service']['IP'],
+                    port=SERVICE_CONFIG['task_scheduler_service']['port'])
+
+    finally:
+        with UseDatabase(db_handler.connection_config()) as cursor:
+            _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
+            cursor.execute(_SQL)
