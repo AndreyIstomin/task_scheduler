@@ -1,11 +1,12 @@
-import uuid
 import json
 import pika
-from functools import wraps
+from abc import ABC, abstractmethod
+from typing import *
 from PluginEngine import Log, ProgressInterface
 from PluginEngine.asserts import require
-from LandscapeEditor.backend import RPCConsumerInterface, GeneratorInterface, CloseRequestException
+from LandscapeEditor.backend import RPCConsumerInterface, Generator, CloseRequestException, TaskInputInterface
 from backend.task_scheduler_service import ResponseObject, ResponseStatus
+from backend.task_scheduler_service.task_manager_common import TaskInput
 from backend.task_scheduler_service.rpc_common import RPCBase, CMDHandler
 from backend.generator_service import create_client_notifier, create_db_handler
 
@@ -60,10 +61,12 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
     If enabled, CloseRequestException is raised on forced close request;
     A default value must be False;
     """
+
     _raise_on_close_request = False
 
+    @abstractmethod
     def _run_task(self):
-        raise NotImplementedError()
+        pass
 
     def __init__(self):
         self._connection = None
@@ -75,7 +78,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._ch = None
         self._method = None
         self._properties = None
-        self._payload = None
+        self._input = None
 
         self._task_is_opened = False
         self._task_is_closed = False
@@ -96,8 +99,8 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
     def instance_id(self) -> int:
         return self._consumer_input.instance_id
 
-    def payload(self) -> dict:
-        return self._payload
+    def input(self) -> TaskInputInterface:
+        return self._input
 
     def publish_progress(self, progress: '[0.0, 1.0]', message=None):
 
@@ -139,8 +142,14 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._err_message = err_message
 
     @classmethod
+    @abstractmethod
     def heartbit_timeout(cls):
-        raise NotImplementedError
+        pass
+
+    @classmethod
+    @abstractmethod
+    def validate_input(cls, data: Any) -> Tuple[bool, str]:
+        pass
 
 
 #  Protected ###########################################################################################################
@@ -202,7 +211,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self._reset_state()
 
             if not self._cmd_handler.try_open_task(self._properties.correlation_id):
-                user = 'user1'  # TODO
+                user = 'undefined'  # TODO
                 self.notify_task_failed(f'Task has been cancelled by user {user}')
                 return
 
@@ -210,10 +219,17 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
             # Check input
             try:
-                self._payload = json.loads(body)
+                data = json.loads(body)
+                ok, msg = self.validate_input(data)
+                if not ok:
+                    Log.error(f"Incorrect JSON format: {msg}")
+                    self.notify_task_failed(f"Incorrect JSON format: {msg}")
+                    return
+
+                self._input = TaskInput.from_dict(data)
             except json.JSONDecodeError as err:
-                Log.error(f"Consumer {self.get_routing_key()} incorrect input data: {err}")
-                self.notify_task_failed(f"Incorrect input data: {err}")
+                Log.error(f"Incorrect JSON: {err}")
+                self.notify_task_failed(f"Incorrect JSON: {err}")
                 return
 
             # Run task
@@ -222,13 +238,13 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
         except CloseRequestException:
 
-            user = 'user1'  # TODO!!!
+            user = 'undefined'  # TODO!!!
             self.notify_task_failed(f'Interrupted by {user}')
 
         except Exception as err:
-            Log.error(f"Consumer {self.get_routing_key()} exception: {str(err)}")
+            Log.error(f"Consumer {self.get_routing_key()} {type(err).__name__}: {str(err)}")
 
-            self.notify_task_failed(f'Exception: {err}')
+            self.notify_task_failed(f'{type(err).__name__}: {err}')
         finally:
             if not self._failed:
                 self._publish_completed()
@@ -271,26 +287,34 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
 class GeneratorAdapter(RPCConsumer):
 
-    def __init_subclass__(cls, generator_class: type, raise_on_close_request: bool, heartbit_timeout: int):
+    _heartbit_timeout = 0
 
-        require(issubclass(generator_class, GeneratorInterface))
+    def __init_subclass__(cls, generator_class: type(Generator), raise_on_close_request: bool, heartbit_timeout: int):
 
-        cls.__generator = generator_class
-        cls.__heartbit_timeout = heartbit_timeout
+        require(issubclass(generator_class, Generator))
+
+        cls._generator = generator_class
+        cls._heartbit_timeout = heartbit_timeout
         cls._raise_on_close_request = raise_on_close_request
 
         super(GeneratorAdapter, cls).__init_subclass__()
 
     def _run_task(self):
 
-        generator = self.__generator(
-            create_client_notifier(self._payload['username'],  self.__generator.process_name()),
-            create_db_handler(), self._payload, self)
+        generator = self._generator(
+            create_client_notifier(self.input().username(), self._generator.process_name()),
+            create_db_handler(), self)
         generator._run()
 
     @classmethod
     def heartbit_timeout(cls):
-        return cls.__heartbit_timeout
+        return cls._heartbit_timeout
+
+    @classmethod
+    def validate_input(cls, data: Any) -> Tuple[bool, str]:
+        return cls._generator.validata_input(data)
+
+
 
 
 

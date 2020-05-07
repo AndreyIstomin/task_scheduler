@@ -230,4 +230,4 @@ class Run(ExecutableNode):
         return f'routing-key="{self.routing_key}"'
 
     async def execute(self, task: TaskInterface):
-        return await task.task_manager().run_request(task.uuid(), self.routing_key, task.payload())
+        return await task.task_manager().run_request(task.uuid(), self.routing_key)

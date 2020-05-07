@@ -4,14 +4,15 @@ import uuid
 import json
 import jsonschema
 import pika
-from multiprocessing import Process, Value
+from multiprocessing import Process
 from PluginEngine import Log
 from PluginEngine.common import empty_uuid
 from PluginEngine.asserts import require
+from LandscapeEditor.backend import TaskInputInterface
 from backend.task_scheduler_service import SchedulerAsyncPublisher, SchedulerAsyncConsumer, RPCConsumerInput
 from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
-from backend.task_scheduler_service.rpc_common import RPCBase, RPCRegistry, RPCData, RPCStatus, RPCErrorCallbackInterface, \
-    RPCManagerCMD, CMDManager, CMDHandler, CMDHandlerMock, CMDType
+from backend.task_scheduler_service.rpc_common import RPCBase, RPCRegistry, RPCData, RPCStatus, \
+    RPCErrorCallbackInterface, RPCManagerCMD, CMDManager, CMDType
 
 
 class RPCConsumerData:
@@ -67,19 +68,18 @@ class RPCManager(RPCRegistry):
         self._consumers.append(RPCConsumerData(routing_key, instance_count))
 
     # Client interface
-    def request(self, routing_key: str, payload: dict) -> RPCData:
+    def request(self, routing_key: str, task_input: TaskInputInterface) -> RPCData:
         require(self._regime == RPCManager.CLIENT)
         require(self._publisher)
         require(self._publisher.running())
 
-        d = dict(payload)
-
         if routing_key not in self._known_consumers:
             return RPCData(empty_uuid, routing_key, 0.0, RPCStatus.FAILED, 'Unknown routing key')
 
-        json_payload = json.dumps(d)
+        json_payload = json.dumps(task_input.to_dict())
         request_id = uuid.uuid4()
-        self._publisher.publish_message(exchange=self.EXCHANGE, routing_key=routing_key, corr_id=request_id, payload=json_payload)
+        self._publisher.publish_message(exchange=self.EXCHANGE, routing_key=routing_key, corr_id=request_id,
+                                        payload=json_payload)
         self._requests[request_id] = RPCManager.Request()
 
         return RPCData(request_id, routing_key, 0.0, RPCStatus.WAITING, 'The request has been sent')
@@ -121,7 +121,6 @@ class RPCManager(RPCRegistry):
 
         else:
             return False, 'Request not found'
-
 
     # Both
     def run_async(self, io_loop) -> (bool, str):

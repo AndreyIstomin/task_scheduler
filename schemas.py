@@ -1,4 +1,4 @@
-from backend.generator_service.schema_components import USERNAME_PROPERTY
+from LandscapeEditor.backend.schema_components import USERNAME_PROPERTY
 
 task_id = [0, 1, 2]  # TODO: temporal solution!
 

@@ -6,7 +6,7 @@ from PluginEngine import UseDatabase, Log, quadtree
 from PluginEngine.postgis import MINIMUM_BIGINT_VALUE
 from LandscapeEditor.backend import BackendDBHandler
 from backend.generator_service import create_db_handler
-from backend.task_scheduler_service.common import LockedData, EditLockManagerInterface
+from backend.task_scheduler_service.common import LockedData, EditLockManagerInterface, TypeList, CellMap, ObjectMap
 
 
 class LockedCells(LockedData):
@@ -71,7 +71,7 @@ WHERE id > {self._cell_history_id}"""
         self.sync()
         return LockedObjects([], lambda x: None)
 
-    def _lock_cells(self, obj_types: List[Tuple[int, Union[List[int], None]]]) -> LockedCells:
+    def _lock_cells(self, obj_types: TypeList) -> LockedCells:
 
         self._lock_id += 1
         lock_id = self._lock_id
@@ -79,25 +79,32 @@ WHERE id > {self._cell_history_id}"""
         for type_id, subtypes in obj_types:
             if subtypes:
                 for subtype_id in subtypes:
-                    cells[(type_id, subtype_id)] = self._lock_cells_by_type(type_id, subtype_id)
+                    self._lock_cells_by_subtype(type_id, subtype_id, cells)
             else:
-                cells[(type_id, None)] = self._lock_cells_by_type(type_id, None)
+                self._lock_cells_by_type(type_id, cells)
 
         return LockedCells(cells, lambda x: self._unlock_cells(lock_id, x))
 
-    def _lock_cells_by_type(self, type_id: int, subtype_id: Optional[int] = None) -> List[quadtree.QCell]:
-        cells = []
-        if subtype_id is None:
-            for row in self._cell_history:
-                if not row.lock_id and not row.completed and row.type_id == type_id:
-                    row.lock_id = self._lock_id
-                    cells.append(quadtree.make_cell_by_raw_index(row.qtree_id + MINIMUM_BIGINT_VALUE))
-        else:
-            for row in self._cell_history:
-                if not row.lock_id and not row.completed and (row.type_id, row.subtype_id) == (type_id, subtype_id):
-                    row.lock_id = self._lock_id
-                    cells.append(quadtree.make_cell_by_raw_index(row.qtree_id + MINIMUM_BIGINT_VALUE))
-        return cells
+    def _lock_cells_by_subtype(self, type_id: int, subtype_id: int, cells: CellMap):
+        ls = []
+
+        for row in self._cell_history:
+            if not row.lock_id and not row.completed and (row.type_id, row.subtype_id) == (type_id, subtype_id):
+                row.lock_id = self._lock_id
+                ls.append(quadtree.make_cell_by_raw_index(row.qtree_id + MINIMUM_BIGINT_VALUE))
+        if ls:
+            d = cells.setdefault(type_id, {})
+            d[subtype_id] = ls
+
+    def _lock_cells_by_type(self, type_id: int, cells: CellMap):
+        d = {}
+        for row in self._cell_history:
+            if not row.lock_id and not row.completed and row.type_id == type_id:
+                row.lock_id = self._lock_id
+                ls = d.setdefault(row.subtype_id, [])
+                ls.append(quadtree.make_cell_by_raw_index(row.qtree_id + MINIMUM_BIGINT_VALUE))
+        if d:
+            cells[type_id] = d
 
     def _unlock_cells(self, lock_id: int, completed: bool):
         for item in self._cell_history:

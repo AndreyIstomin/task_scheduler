@@ -2,7 +2,7 @@
 <scenario name="test_scenario_3">
     <input type="rect"/>
     <consequent>
-        <consequent>
+        <consequent lock_cells="infrastructure_line">
 <!--            <run>consumer_A</run>-->
 <!--            <run>consumer_B</run>-->
             <run>consumer_B</run>

@@ -3,6 +3,7 @@ import asyncio
 from collections import namedtuple
 from PluginEngine import Log
 from PluginEngine.asserts import require
+from LandscapeEditor.backend import TaskInputInterface
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
     RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
 from backend.task_scheduler_service.common import TaskManagerInterface, EditLockManagerInterface
@@ -44,15 +45,15 @@ class TaskManager(TaskManagerInterface):
         self._rpc_manager = None
         self._amqp_url = amqp_url
 
-    async def run_request(self, task_uuid: uuid.UUID, routing_key: str, payload: dict):
+    async def run_request(self, task_uuid: uuid.UUID, routing_key: str):
 
         require(task_uuid in self._tasks, f'Unknown task id: {task_uuid}')
         task_data = self._tasks[task_uuid]
-
         if task_data.close_requested:
             return False
 
-        rpc = self._rpc_manager.request(routing_key, payload)
+        task_input = task_data.task.make_task_input()
+        rpc = self._rpc_manager.request(routing_key, task_input)
         if rpc.status == RPCStatus.WAITING:
             task_data.set_waiting()
             task_data.requests.append(rpc)
@@ -78,14 +79,15 @@ class TaskManager(TaskManagerInterface):
                     task_started = True
                     timeout = self._rpc_manager.heartbit_timeout(routing_key)
 
-                elif rsp.status == ResponseStatus.IN_PROGRESS:
+                if rsp.status == ResponseStatus.IN_PROGRESS:
                     rpc.set_in_progress()
                     task_data.set_in_progress()
 
                 elif rsp.status == ResponseStatus.FAILED:
                     rpc.set_failed()
                     task_data.set_failed()
-                    self.request_stop_task(task_uuid, payload['username'])
+                    self.request_stop_task(task_uuid, task_input.username())
+                    Log.error(f'{routing_key} failed: {rsp.message}')
                     return False
 
                 elif rsp.status == ResponseStatus.COMPLETED:
@@ -97,10 +99,10 @@ class TaskManager(TaskManagerInterface):
 
             except asyncio.TimeoutError as err:
                 # The place for request's thread termination
-                # rpc.set_failed()
+                rpc.set_failed()
                 rpc.message = f'heartbit timeout {timeout} seconds has been reached'
-                # task_data.set_failed()
-                self.request_stop_task(task_uuid, payload['username'])
+                task_data.set_failed()
+                self.request_stop_task(task_uuid, task_input.username())
                 continue
 
             finally:
@@ -108,12 +110,17 @@ class TaskManager(TaskManagerInterface):
                 self._task_logger.update_task(task_data)
 
     def notify_task_closed(self, task_uuid: uuid.UUID):
+
         to_delete = [key for key, value in self._requests.items() if value.task_uuid == task_uuid]
         for key in to_delete:
             del self._requests[key]
 
         if task_uuid in self._tasks:
-            self._closed_tasks = self._tasks[task_uuid]
+
+            task_data = self._tasks[task_uuid]
+            task_data.set_closed()
+            self._task_logger.update_task(task_data)
+            self._closed_tasks = task_data
             del self._tasks[task_uuid]
 
         self._log_task_info()

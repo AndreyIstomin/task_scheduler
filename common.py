@@ -1,17 +1,22 @@
 import uuid
 import json
 import jsonschema
-import asyncio
-from collections import defaultdict
+from typing import *
 from multiprocessing import Array
 from abc import ABC, abstractmethod
-from PluginEngine import Log
+from PluginEngine import Log, quadtree
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
+from LandscapeEditor.backend import TaskInputInterface
 from backend.task_scheduler_service.schemas import RESPONSE_SCHEMA
 
 
-__all__ = ["ResponseStatus", "ResponseObject", "array_to_uuid", "uuid_to_array", "shorten_uuid", "TaskManagerInterface",
-           "LockedData", "EditLockManagerInterface", "TaskInterface"]
+__all__ = ["TypeList", "ObjectMap", "CellMap",
+           "ResponseStatus", "ResponseObject", "array_to_uuid", "uuid_to_array", "shorten_uuid",
+           "TaskManagerInterface", "LockedData", "EditLockManagerInterface", "TaskInterface"]
+
+TypeList = NewType('TypeList', List[Tuple[int, Union[List[int], None]]])
+ObjectMap = NewType('ObjectType', Dict[int, Dict[int, List[Any]]])
+CellMap = NewType('CellMap', Dict[int, Dict[int, List[quadtree.QCell]]])
 
 
 class ResponseStatus:
@@ -69,9 +74,9 @@ def shorten_uuid(_uuid: uuid.UUID):
 
 
 class LockedData:
-    def __init__(self, objects: defaultdict(list), unlock: 'function(x: bool)'):
+    def __init__(self, objects: ObjectMap, unlock: Callable[[bool], NoReturn]):
         """
-        :param objects: like {(type_1, subtype_1_1): [cell_list], (type_2, None): [cell_list]},
+        :param objects: like {(type_1: {subtype_1_1: [obj_list], subtype_1_2: [obj_list]}, type_2: ...
         None means any subtype
         :param unlock: closure for unlocking this LockedData object
         """
@@ -95,7 +100,7 @@ unlock objects ({shorten_uuid(self.__uuid)}):
         return len(self.__objects)
 
     def __iter__(self):
-        return iter(self.__objects)
+        return iter(self.__objects.items())
 
     def __hash__(self):
         return hash(self.__uuid)
@@ -105,11 +110,11 @@ unlock objects ({shorten_uuid(self.__uuid)}):
         if Log.get_log_level() <= log_level:
             text = '\n'.join(
                 'type: {0}, subtype: {1}, {2} cells'.format(
-                    LANDSCAPE_OBJECT_TYPE.verbose(key[0]),
-                    'all' if key[1] is None else key[1],
+                    LANDSCAPE_OBJECT_TYPE.verbose(key_1),
+                    'all' if key_2 is None else key_2,
                     len(value)
                 )
-                for key, value in self.__objects.items())
+                for key_1, dict_1 in self.__objects.items() for key_2, value in dict_1.items())
 
             Log.log_message(log_level, log_type=Log.CONSOLE, message=f"""
 lock objects ({shorten_uuid(self.__uuid)}):
@@ -124,7 +129,7 @@ class EditLockManagerInterface(ABC):
         pass
 
     @abstractmethod
-    def get_affected_cells(self, obj_types: list) -> LockedData:
+    def get_affected_cells(self, obj_types: TypeList) -> LockedData:
         """
         Return affected cells list of the given type/subtype
         :param obj_types: list of object type/object subtype pairs
@@ -134,7 +139,7 @@ class EditLockManagerInterface(ABC):
         pass
 
     @abstractmethod
-    def get_affected_objects(self, obj_types: list) -> LockedData:
+    def get_affected_objects(self, obj_types: TypeList) -> LockedData:
         """
         Return affected object indices list of the given type/subtype
         :param obj_types: list of object type/object subtype pairs
@@ -154,7 +159,7 @@ class TaskManagerInterface(ABC):
         pass
 
     @abstractmethod
-    def run_request(self, task_uuid: uuid.UUID, routing_key: str, payload: dict):
+    def run_request(self, task_uuid: uuid.UUID, routing_key: str):
         pass
 
     @abstractmethod
@@ -189,7 +194,11 @@ class TaskInterface(ABC):
         pass
 
     @abstractmethod
-    def payload(self) -> dict:
+    def init_payload(self) -> dict:
+        pass
+
+    @abstractmethod
+    def make_task_input(self) -> TaskInputInterface:
         pass
 
     @abstractmethod

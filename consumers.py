@@ -3,6 +3,11 @@ Static initialisation of RPC consumers
 """
 import time
 import pika
+from typing import *
+from jsonschema import validate, ValidationError
+from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
+from LandscapeEditor.road.common import IL_SUBTYPE
+from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
 from LandscapeEditor.road import RoadGenerator
 from backend.task_scheduler_service import RPCRegistry, GeneratorAdapter, ResponseObject, RPCConsumer
 
@@ -29,19 +34,32 @@ class TestRPCConsumer(RPCConsumer):
 
         self.publish_progress(0.0, f"Starting the {self.instance_id()}th test RPC consumer")
         step_count = 1000
+
+        locked_cell_count = len(self.input().cells_by_subtype(LANDSCAPE_OBJECT_TYPE.INFRASTRUCTURE_LINE,
+                                                              IL_SUBTYPE.ROAD))
+
         for step in range(step_count):
 
             time.sleep(self.__step_ms * 0.001)
 
             if (step + 1) % (step_count / 10) == 0:
                 pr = (step + 1)/float(step_count)
-                self.publish_progress(pr, f"Current progress {int(pr * 100.0)}%")
+                self.publish_progress(pr, f"Locked cell count: {locked_cell_count}")
 
         self.notify_task_completed(f"The {self.instance_id()}th {self.get_routing_key()} completed the task")
 
     @classmethod
     def heartbit_timeout(cls):
         return 2
+
+    @classmethod
+    def validate_input(cls, data: Any) -> Tuple[bool, str]:
+
+        try:
+            validate(data, DEFAULT_SCHEMA)
+            return True, 'Ok'
+        except ValidationError as err:
+            return False, f'Incorrect JSON format: {err}'
 
 
 @RPCRegistry.is_consumer('consumer_A')
