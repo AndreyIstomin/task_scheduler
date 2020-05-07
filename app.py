@@ -1,5 +1,6 @@
 import os
 import jsonschema
+import uuid
 import jinja2
 import aiohttp_jinja2
 from aiohttp import web
@@ -16,13 +17,18 @@ the_app = None
 
 
 async def run_task(request):
-    data = await request.json()
     try:
+        data = await request.json()
         jsonschema.validate(data, RUN_TASK_SCHEMA)
-    except jsonschema.ValidationError as err:
+    except (jsonschema.ValidationError, Exception) as err:
         return web.Response(status=web.HTTPBadRequest.status_code, text=str(err))
 
-    ok, msg = await task_manager.start_task(task_id=data['task_id'], payload=data)
+    try:
+        task_id = uuid.UUID(data['task_id'])
+    except ValueError as err:
+        return web.Response(status=web.HTTPBadRequest.status_code, text="incorrect task id UUID")
+
+    ok, msg = await task_manager.start_task(task_id, payload=data)
 
     if ok:
         return web.Response(status=web.HTTPOk.status_code, text=f"Task {data['task_id']} has been created by {data['username']}")
@@ -68,7 +74,7 @@ def init():
 
     # route part
     app.add_routes([
-        web.post('/run_task', run_task)
+        web.post(SERVICE_CONFIG['task_scheduler_service']['run_task_url'], run_task)
     ])
 
     for route in routes:
@@ -84,32 +90,33 @@ def init():
 
 if __name__ == '__main__':
     db_handler = create_db_handler()
-    test_history_table = 't_edit_history_transient'
-    try:
-        the_app = init()
-        logger = TaskLogger(the_app)
+    # test_history_table = 't_edit_history_transient'
+    # try:
+    the_app = init()
+    logger = TaskLogger(the_app)
 
-        scenario_provider = ScenarioProvider()
-        edit_lock_manager = EditLockManager(db_handler)
-        edit_lock_manager._table[0] = test_history_table
+    scenario_provider = ScenarioProvider()
+    scenario_provider.load()
+    edit_lock_manager = EditLockManager(db_handler)
+    # edit_lock_manager._table[0] = test_history_table
 
-        with UseDatabase(db_handler.connection_config()) as cursor:
-            _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
-            cursor.execute(_SQL)
-            _SQL = f"""CREATE TABLE {test_history_table} AS TABLE edit_history_transient"""
-            cursor.execute(_SQL)
+    # with UseDatabase(db_handler.connection_config()) as cursor:
+    #     _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
+    #     cursor.execute(_SQL)
+    #     _SQL = f"""CREATE TABLE {test_history_table} AS TABLE edit_history_transient"""
+    #     cursor.execute(_SQL)
 
-        task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider,
-                                   edit_lock_manager, logger)
-        task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
+    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider,
+                               edit_lock_manager, logger)
+    task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
 
-        the_app['task_manager'] = task_manager  # xz xz ...
+    the_app['task_manager'] = task_manager  # xz xz ...
 
-        web.run_app(the_app,
-                    host=SERVICE_CONFIG['task_scheduler_service']['IP'],
-                    port=SERVICE_CONFIG['task_scheduler_service']['port'])
+    web.run_app(the_app,
+                host=SERVICE_CONFIG['task_scheduler_service']['IP'],
+                port=SERVICE_CONFIG['task_scheduler_service']['port'])
 
-    finally:
-        with UseDatabase(db_handler.connection_config()) as cursor:
-            _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
-            cursor.execute(_SQL)
+    # finally:
+    #     with UseDatabase(db_handler.connection_config()) as cursor:
+    #         _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
+    #         cursor.execute(_SQL)

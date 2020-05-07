@@ -1,7 +1,12 @@
 import os
+import uuid
 import xml.etree.ElementTree as ET
+from copy import deepcopy
+from PluginEngine.asserts import require
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
+from backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service.scenario_common import *
+from backend.task_scheduler_service.rpc_common import RPCRegistry
 
 __all__ = ['ScenarioProvider']
 
@@ -10,6 +15,9 @@ class ScenarioProvider(ScenarioProviderBase):
 
     def __init__(self):
         self._has_root_group_execution = False
+        self._names = {}
+        self._notify_bindings = {}
+        self._scenarios = {}
 
     def get_xml_data(self, task_id: int):
         path = os.path.join(os.path.dirname(__file__), 'test/test_scenario_3.xml')
@@ -18,30 +26,58 @@ class ScenarioProvider(ScenarioProviderBase):
 
         return xml_data
 
-    def get_scenario(self, task_id: int) -> (Scenario, str):
-        """
-        Temp implementation
-        """
+    def load(self):
 
+        self._names = {}
+        self._notify_bindings = {}
+        self._scenarios = {}
+        path = SERVICE_CONFIG['task_scheduler_service']['scenario_db']
+        root = ET.parse(path).getroot()
+        if root.tag != 'config':
+            raise self.ParseError('Root tag of scenario DB must be "config"')
+        for child in root:
+            self._load_scenario(child)
+
+    def _load_scenario(self, node: ET.Element):
         self._has_root_group_execution = False
-        root = ET.fromstring(self.get_xml_data(task_id))
-        if root.tag != 'scenario':
-            return None, 'Scenario root tag must be "scenario"'
-        if 'name' not in root.attrib:
-            return None, 'Attribute "name" is not specified in tag "scenario"'
-
-        scenario = Scenario(root.attrib['name'])
-
+        if node.tag != 'scenario':
+            raise self.ParseError('Scenario root tag must be "scenario"')
+        if 'name' not in node.attrib:
+            raise self.ParseError('Attribute "name" is not specified in tag "scenario"')
+        if 'uuid' not in node.attrib:
+            raise self.ParseError('Attribute "uuid" is not specified in tag "scenario"')
         try:
-            for child in root:
-                self._parse_tag(child, scenario)
-        except ScenarioProvider.ParseError as err:
-            return None, str(err)
+            task_id = uuid.UUID(node.attrib['uuid'])
+        except Exception:
+            raise self.ParseError('Attribute "uuid" has is incorrect value')
 
-        if scenario.input_type is None:
-            return None, 'Missing tag "input"'
+        if task_id in self._scenarios:
+            raise self.ParseError('Duplicate scenario uuid: {}'.format(node.attrib['uuid']))
+        if node.attrib['name'] in self._names:
+            raise self.ParseError('Duplicate scenario name: {}'.format(node.attrib['name']))
+        if 'notify' in node.attrib and node.attrib['notify'] in self._notify_bindings:
+            raise self.ParseError('Duplicate notify binding: {}'.format(node.attrib['notify']))
 
-        return scenario, 'OK'
+        scenario = Scenario(node.attrib['name'])
+        for child in node:
+            self._parse_tag(child, scenario)
+
+        ok, msg = RPCRegistry.check_scenario(scenario)
+        if not ok:
+            raise RPCRegistry.UnknownRoutingKeyError(msg)
+
+        self._names[scenario.name()] = scenario
+        if 'notify' in node.attrib:
+            self._notify_bindings[node.attrib['notify']] = scenario
+        self._scenarios[task_id] = scenario
+
+    def get_scenario(self, task_id: uuid.UUID) -> (Scenario, str):
+
+        require(isinstance(task_id, uuid.UUID))
+        if task_id in self._scenarios:
+            return deepcopy(self._scenarios[task_id]), 'Ok'
+
+        return None, f'Unknown scenario {task_id}'
 
     def _create_locker(self, attrib: dict):
 

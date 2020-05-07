@@ -154,9 +154,10 @@ class Task(TaskInterface):
     Provide access to the task's context: state, payload, running task manager, etc.
     """
 
-    def __init__(self, task_uuid: uuid.UUID, task_id: int, payload: dict, task_manager: TaskManagerInterface,
+    def __init__(self, task_uuid: uuid.UUID, task_id: uuid.UUID, payload: dict, task_manager: TaskManagerInterface,
                  lock_manager: EditLockManagerInterface):
 
+        require(isinstance(task_id, uuid.UUID))
         self._uuid = task_uuid
         self._task_id = task_id
         self._scenario = None
@@ -198,7 +199,7 @@ class Task(TaskInterface):
 
     def name(self):
         if self._scenario:
-            return self._scenario.name
+            return self._scenario.name()
 
     def add_cells(self, cells: LockedData):
         self._input_producer.add_locked_cells(cells)

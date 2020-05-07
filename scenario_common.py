@@ -1,5 +1,5 @@
 import asyncio
-from PluginEngine import Log
+from typing import *
 from PluginEngine.asserts import require
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
 from LandscapeEditor.road.common import IL_SUBTYPE
@@ -159,11 +159,17 @@ class ExecutableNode:
 class Scenario(ExecutableNode):
     def __init__(self, name: str):
         ExecutableNode.__init__(self)
-        self.name = name
-        self.input_type = None
+        self._name = name
+        self._input_type = None
 
-    def _properties_str(self):
+    def _properties_str(self) -> str:
         return f'name="{self.name}", input={self.input_type}'
+
+    def name(self) -> str:
+        return self._name
+
+    def input_type(self) -> Union[int, None]:
+        return self._input_type
 
     async def execute(self, task: TaskInterface):
         require(len(self._children) == 1, 'Multiple group execution nodes in root')

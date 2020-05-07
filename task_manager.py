@@ -125,7 +125,7 @@ class TaskManager(TaskManagerInterface):
 
         self._log_task_info()
 
-    async def start_task(self, task_id: int, payload: dict):
+    async def start_task(self, task_id: uuid.UUID, payload: dict):
 
         task_uuid = uuid.uuid4()
         task = Task(task_uuid, task_id, payload, task_manager=self, lock_manager=self._lock_manager)
