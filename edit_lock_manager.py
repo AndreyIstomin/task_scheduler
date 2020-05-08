@@ -33,7 +33,6 @@ class EditLockManager(EditLockManagerInterface):
     def __init__(self, db_handler: BackendDBHandler):
 
         self._db_handler = db_handler
-        self._cell_history_id = 0
         self._lock_id = 0
         self._cell_history = []
         self._table = ['edit_history_transient']
@@ -49,17 +48,14 @@ class EditLockManager(EditLockManagerInterface):
             cell_history = [item for item in self._cell_history if not item.completed]
             self._cell_history = cell_history
 
-            _SQL = f"""
-SELECT *, 0 as lock_id, false as completed FROM {self._table[0]} 
-WHERE id > {self._cell_history_id}"""
+            _SQL = f"""SELECT *, 0 as lock_id, false as completed FROM {self._table[0]}"""
 
             cursor.execute(_SQL)
 
             for item in cursor:
                 self._cell_history.append(HistoryRow(*item))
-                self._cell_history_id = max(self._cell_history[-1].id, self._cell_history_id)
 
-        self._log_cell_history()
+        # self._log_cell_history()
 
     def get_affected_cells(self, obj_types: list) -> LockedCells:
 

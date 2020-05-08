@@ -33,7 +33,10 @@ class ScenarioProvider(ScenarioProviderBase):
         self._notify_bindings = {}
         self._scenarios = {}
         path = SERVICE_CONFIG['task_scheduler_service']['scenario_db']
-        root = ET.parse(path).getroot()
+        try:
+            root = ET.parse(path).getroot()
+        except ET.ParseError as err:
+            raise self.ParseError(f'Incorrect XML: {err}')
         if root.tag != 'config':
             raise self.ParseError('Root tag of scenario DB must be "config"')
         for child in root:

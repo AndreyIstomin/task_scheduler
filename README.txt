@@ -20,7 +20,7 @@
 1. Запустить cmd
 2. Выполнить rabbitmqctl add_user user1 123456
 3. Выполнить rabbitmqctl set_user_tags user1 administrator
-4. Выполнить set_permissions -p / user1 ".*" ".*" ".*"
+4. Выполнить rabbitmqctl set_permissions -p / user1 ".*" ".*" ".*"
 
 Включение консоли RabbitMQ:
 
