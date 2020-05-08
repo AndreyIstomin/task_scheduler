@@ -312,7 +312,7 @@ class GeneratorAdapter(RPCConsumer):
 
     @classmethod
     def validate_input(cls, data: Any) -> Tuple[bool, str]:
-        return cls._generator.validata_input(data)
+        return cls._generator.validate_input(data)
 
 
 

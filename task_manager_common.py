@@ -112,13 +112,13 @@ class InputProducer:
             d = {}
             for lock in self._locked_cells:
                 self._add_cells_to_dict(lock, d)
-            data['locked_cells'] = [(key[0], key[1], value) for key, value in d.items()]
+            data['locked_cells'] = [(key[0], key[1], list(value)) for key, value in d.items()]
 
         if self._locked_objects:
             d = {}
             for lock in self._locked_objects:
                 self._add_objects_to_dict(lock, d)
-            data['locked_cells'] = [(key[0], key[1], value) for key, value in d.items()]
+            data['locked_objects'] = [(key[0], key[1], list(value)) for key, value in d.items()]
 
         return TaskInput.from_dict(data)
 
@@ -135,18 +135,18 @@ class InputProducer:
         self._locked_objects.remove(objects)
 
     @staticmethod
-    def _add_cells_to_dict(lock: LockedData, output: dict):
+    def _add_cells_to_dict(lock: LockedData, output: Dict[Tuple[int, int], Set[QCell]]):
         for type_id, subtypes in lock:
             for subtype_id, cells in subtypes.items():
-                li = output.setdefault((type_id, subtype_id), [])
-                li.extend(item.get_raw_index() for item in cells)
+                s = output.setdefault((type_id, subtype_id), set())
+                s.update(item.get_raw_index() for item in cells)
 
     @staticmethod
-    def _add_objects_to_dict(lock: LockedData, output: dict):
+    def _add_objects_to_dict(lock: LockedData, output: Dict[Tuple[int, int], Set[int]]):
         for type_id, subtypes in lock:
             for subtype_id, indices in subtypes.items():
-                li = output.setdefault((type_id, subtype_id), [])
-                li.extend(indices)
+                s = output.setdefault((type_id, subtype_id), set())
+                s.update(indices)
 
 
 class Task(TaskInterface):

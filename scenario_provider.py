@@ -1,6 +1,7 @@
 import os
 import uuid
 import xml.etree.ElementTree as ET
+from typing import *
 from copy import deepcopy
 from PluginEngine.asserts import require
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
@@ -53,12 +54,13 @@ class ScenarioProvider(ScenarioProviderBase):
 
         if task_id in self._scenarios:
             raise self.ParseError('Duplicate scenario uuid: {}'.format(node.attrib['uuid']))
-        if node.attrib['name'] in self._names:
-            raise self.ParseError('Duplicate scenario name: {}'.format(node.attrib['name']))
-        if 'notify' in node.attrib and node.attrib['notify'] in self._notify_bindings:
+        name = node.attrib['name'].lower()
+        if name in self._names:
+            raise self.ParseError('Duplicate scenario name: {}'.format(name))
+        if 'notify' in node.attrib and node.attrib['notify'].lower() in self._notify_bindings:
             raise self.ParseError('Duplicate notify binding: {}'.format(node.attrib['notify']))
 
-        scenario = Scenario(node.attrib['name'])
+        scenario = Scenario(name)
         for child in node:
             self._parse_tag(child, scenario)
 
@@ -66,9 +68,9 @@ class ScenarioProvider(ScenarioProviderBase):
         if not ok:
             raise RPCRegistry.UnknownRoutingKeyError(msg)
 
-        self._names[scenario.name()] = scenario
+        self._names[scenario.name()] = task_id
         if 'notify' in node.attrib:
-            self._notify_bindings[node.attrib['notify']] = scenario
+            self._notify_bindings[node.attrib['notify']] = task_id
         self._scenarios[task_id] = scenario
 
     def get_scenario(self, task_id: uuid.UUID) -> (Scenario, str):
@@ -79,7 +81,14 @@ class ScenarioProvider(ScenarioProviderBase):
 
         return None, f'Unknown scenario {task_id}'
 
-    def _create_locker(self, attrib: dict):
+    def get_task_id(self, notify: str) -> Union[uuid.UUID, None]:
+        return self._notify_bindings.get(notify, None)
+
+    def notifications(self):
+        return self._notify_bindings.keys()
+
+    @staticmethod
+    def _create_locker(attrib: dict):
 
         if 'lock_cells' in attrib:
             return CellLocker.from_str(attrib['lock_cells'])

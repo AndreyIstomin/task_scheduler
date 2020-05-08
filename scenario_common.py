@@ -199,7 +199,7 @@ class Consequent(GroupExecution):
 
     async def execute(self, task: TaskInterface):
 
-        result = False
+        result = True
         try:
             self._locker.begin(task)
             for child in self:

@@ -16,7 +16,7 @@ __all__ = ['RPCRoadGenerator', 'TestConsumerA', 'TestConsumerB', 'TestConsumerC'
 
 @RPCRegistry.is_consumer('road_generator')
 class RPCRoadGenerator(GeneratorAdapter, generator_class=RoadGenerator, raise_on_close_request=True,
-                       heartbit_timeout=5):
+                       heartbit_timeout=600):
     pass
 
 
