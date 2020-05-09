@@ -1,0 +1,34 @@
+<?xml version="1.1" encoding="UTF-8" ?>
+<config>
+    <scenario name="test_scenario_1" uuid="5c4d1b14-ce95-44d3-b946-04ec7b9f0bce">
+		<input type="rect" />
+		<consequent>
+			<consequent lock_cells="infrastructure_line">
+<!--            <run>consumer_A</run>-->
+<!--            <run>consumer_B</run>-->
+				<run>consumer_B</run>
+			</consequent>
+			<concurrent lock_cells="infrastructure_line:road, powerline, fence;tree">
+				<run>consumer_A</run>
+				<run>consumer_A</run>
+				<run>consumer_B</run>
+			</concurrent>
+		</consequent>
+	</scenario>
+    <scenario name="generate_road" uuid="c4318806-0971-4684-80c0-e6241aa6eb86" notify="generate_road">
+		<consequent lock_cells="infrastructure_line:road">
+			<run>road_generator</run>
+		</consequent>
+	</scenario>
+	<scenario name="road_osm_import" uuid="5c3b3a12-f008-4fef-8876-e692dcba01c8">
+		<input type="rect"/>
+		<consequent>
+			<consequent>
+				<run>road_osm_import</run>
+			</consequent>
+			<consequent lock_cells="infrastructure_line:road">
+				<run>road_generator</run>
+			</consequent>
+		</consequent>
+	</scenario>
+</config>
