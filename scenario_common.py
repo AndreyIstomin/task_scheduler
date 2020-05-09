@@ -1,7 +1,10 @@
 import asyncio
 from typing import *
+from jsonschema import validate, ValidationError
 from PluginEngine.asserts import require
+from PluginEngine.quadtree import make_cell_by_raw_index
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
+from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA, RECT_SCHEMA
 from LandscapeEditor.road.common import IL_SUBTYPE
 from backend.task_scheduler_service.common import TaskInterface, EditLockManagerInterface
 
@@ -170,6 +173,21 @@ class Scenario(ExecutableNode):
 
     def input_type(self) -> Union[int, None]:
         return self._input_type
+
+    def check_input(self, payload: Dict[str, Any]) -> (bool, str):
+
+        if self._input_type == ScenarioProviderBase.InputType.RECT:
+            try:
+                validate(payload, RECT_SCHEMA)
+            except ValidationError as err:
+                return False, str(err)
+
+        elif self._input_type == ScenarioProviderBase.InputType.CELLS:
+            try:
+                cells = list(map(make_cell_by_raw_index, payload['cells']))
+            except Exception as err:
+                return False, 'Task input must contain cells: \n' + str(err)
+        return True, 'Ok'
 
     async def execute(self, task: TaskInterface):
         require(len(self._children) == 1, 'Multiple group execution nodes in root')

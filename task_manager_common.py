@@ -194,6 +194,10 @@ class Task(TaskInterface):
         if not ok:
             return False, msg
 
+        ok, msg = self._scenario.check_input(self._init_payload)
+        if not ok:
+            return False, msg
+
         self._valid = True
         return True, 'Ok'
 

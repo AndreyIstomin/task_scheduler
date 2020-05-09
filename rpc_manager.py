@@ -64,7 +64,7 @@ class RPCManager(RPCRegistry):
 
         require(self._regime == RPCManager.SERVER)
         require(not self._running)
-        require(routing_key in self._known_consumers)
+        require(routing_key in self._known_consumers, f'unknown consumer: {routing_key}')
         self._consumers.append(RPCConsumerData(routing_key, instance_count))
 
     # Client interface

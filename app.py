@@ -4,14 +4,15 @@ import uuid
 import jinja2
 import aiohttp_jinja2
 from aiohttp import web
-from PluginEngine import UseDatabase
+from functools import partial
+from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
 from backend.config import SERVICE_CONFIG
 from backend.generator_service import create_db_handler
 from backend.task_scheduler_service import ScenarioProvider, TaskManager, TaskLogger, EditLockManager
 from backend.task_scheduler_service.schemas import RUN_TASK_SCHEMA
 from backend.task_scheduler_service.routes import routes
 
-scenario_provider = None
+
 task_manager = None
 the_app = None
 
@@ -34,6 +35,29 @@ async def run_task(request):
         return web.Response(status=web.HTTPOk.status_code, text=f"Task {data['task_id']} has been created by {data['username']}")
     else:
         return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
+
+
+async def run_task_by_id(request, task_id: uuid.UUID):
+
+    try:
+        data = await request.json()
+        jsonschema.validate(data, DEFAULT_SCHEMA)
+    except (jsonschema.ValidationError, Exception) as err:
+        return web.Response(status=web.HTTPBadRequest.status_code, text=str(err))
+
+    try:
+        task_id = uuid.UUID(str(task_id))
+    except ValueError as err:
+        return web.Response(status=web.HTTPBadRequest.status_code, text="incorrect task id UUID")
+
+    ok, msg = await task_manager.start_task(task_id, payload=data)
+
+    if ok:
+        return web.Response(status=web.HTTPOk.status_code, text=f"Task {data['task_id']} has been created by {data['username']}")
+    else:
+        return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
+
+
 
 
 # async def stop_task(request):
@@ -62,7 +86,10 @@ async def on_shutdown(app):
 #     await app.cleanup()
 
 
-def init():
+def init(scenario_provider: ScenarioProvider):
+
+    def get_id(name: str) -> uuid.UUID:
+        return scenario_provider.get_task_id_by_name(name)
 
     base_dir = os.path.dirname(__file__)
 
@@ -74,7 +101,8 @@ def init():
 
     # route part
     app.add_routes([
-        web.post(SERVICE_CONFIG['task_scheduler_service']['run_task_url'], run_task)
+        web.post(SERVICE_CONFIG['task_scheduler_service']['run_task_url'], run_task),
+        web.post(SERVICE_CONFIG['generator_service']['import_road_url'], partial(run_task_by_id, task_id=get_id('road_osm_import')))
     ])
 
     for route in routes:
@@ -90,23 +118,16 @@ def init():
 
 if __name__ == '__main__':
     db_handler = create_db_handler()
-    # test_history_table = 't_edit_history_transient'
-    # try:
-    the_app = init()
+
+    sp = ScenarioProvider()
+    sp.load()
+
+    the_app = init(sp)
     logger = TaskLogger(the_app)
 
-    scenario_provider = ScenarioProvider()
-    scenario_provider.load()
     edit_lock_manager = EditLockManager(db_handler)
-    # edit_lock_manager._table[0] = test_history_table
 
-    # with UseDatabase(db_handler.connection_config()) as cursor:
-    #     _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
-    #     cursor.execute(_SQL)
-    #     _SQL = f"""CREATE TABLE {test_history_table} AS TABLE edit_history_transient"""
-    #     cursor.execute(_SQL)
-
-    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], scenario_provider,
+    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], sp,
                                edit_lock_manager, logger)
     task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
 
@@ -115,8 +136,3 @@ if __name__ == '__main__':
     web.run_app(the_app,
                 host=SERVICE_CONFIG['task_scheduler_service']['IP'],
                 port=SERVICE_CONFIG['task_scheduler_service']['port'])
-
-    # finally:
-    #     with UseDatabase(db_handler.connection_config()) as cursor:
-    #         _SQL = f"""DROP TABLE IF EXISTS {test_history_table}"""
-    #         cursor.execute(_SQL)

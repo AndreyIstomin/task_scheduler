@@ -19,6 +19,7 @@ class ScenarioProvider(ScenarioProviderBase):
         self._names = {}
         self._notify_bindings = {}
         self._scenarios = {}
+        self._loaded = False
 
     def get_xml_data(self, task_id: int):
         path = os.path.join(os.path.dirname(__file__), 'test/test_scenario_3.xml')
@@ -28,6 +29,9 @@ class ScenarioProvider(ScenarioProviderBase):
         return xml_data
 
     def load(self):
+
+        if self._loaded:
+            return
 
         self._names = {}
         self._notify_bindings = {}
@@ -41,6 +45,8 @@ class ScenarioProvider(ScenarioProviderBase):
             raise self.ParseError('Root tag of scenario DB must be "config"')
         for child in root:
             self._load_scenario(child)
+
+        self._loaded = True
 
     def _load_scenario(self, node: ET.Element):
         self._has_root_group_execution = False
@@ -84,8 +90,11 @@ class ScenarioProvider(ScenarioProviderBase):
 
         return None, f'Unknown scenario {task_id}'
 
-    def get_task_id(self, notify: str) -> Union[uuid.UUID, None]:
+    def get_task_id_by_notification(self, notify: str) -> Union[uuid.UUID, None]:
         return self._notify_bindings.get(notify, None)
+
+    def get_task_id_by_name(self, name: str) -> Union[uuid.UUID, None]:
+        return self._names.get(name, None)
 
     def notifications(self):
         return self._notify_bindings.keys()
