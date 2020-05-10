@@ -74,7 +74,7 @@ def shorten_uuid(_uuid: uuid.UUID):
 
 
 class LockedData:
-    def __init__(self, objects: ObjectMap, unlock: Callable[[bool], NoReturn]):
+    def __init__(self, objects: ObjectMap, unlock: Callable[[bool], None]):
         """
         :param objects: like {(type_1: {subtype_1_1: [obj_list], subtype_1_2: [obj_list]}, type_2: ...
         None means any subtype
