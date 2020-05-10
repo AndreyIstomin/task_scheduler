@@ -1,5 +1,4 @@
 from typing import *
-from dataclasses import asdict
 from PluginEngine import quadtree
 from backend.task_scheduler_service.api_launcher import run_app, Rect
 
@@ -15,7 +14,7 @@ def prepare_rect_1() -> Dict[str, float]:
 
     cell.get_bound_box(bl0, bl1)
 
-    return asdict(Rect(bl0.lon, bl1.lon, bl0.lat, bl1.lat))
+    return Rect(bl0.lon, bl1.lon, bl0.lat, bl1.lat).to_dict()
 
 
 if __name__ == '__main__':

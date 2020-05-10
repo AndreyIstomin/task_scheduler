@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime
 from typing import *
-from dataclasses import dataclass
 from PluginEngine import UseDatabase, Log, quadtree
 from PluginEngine.postgis import MINIMUM_BIGINT_VALUE
 from LandscapeEditor.backend import BackendDBHandler
@@ -17,15 +16,19 @@ class LockedObjects(LockedData):
     pass
 
 
-@dataclass
 class HistoryRow:
-    id: int
-    qtree_id: int
-    type_id: int
-    subtype_id: int
-    changed: datetime
-    lock_id: int
-    completed: bool
+    """
+    TODO: dataclass should be used
+    """
+    def __init__(self, id: int, qtree_id: int, type_id: int, subtype_id: int, changed: datetime, lock_id: int,
+                 completed: bool):
+        self.id = id
+        self.qtree_id = qtree_id
+        self.type_id = type_id
+        self.subtype_id = subtype_id
+        self.changed = changed
+        self.lock_id = lock_id
+        self.completed = completed
 
 
 class EditLockManager(EditLockManagerInterface):
