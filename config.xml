@@ -50,5 +50,55 @@
 			</consequent>
 		</consequent>
 	</scenario>
-
+<!--	Powerline-->
+	<scenario name="generate_powerline" uuid="f3678da6-90c6-430a-bc4f-7d7f09b36b89" notify="generate_power_line">
+		<consequent lock_cells="infrastructure_line:powerline">
+			<run>powerline_generator</run>
+		</consequent>
+	</scenario>
+	<scenario name="powerline_osm_import" uuid="9215ca78-0acb-49a3-b961-0d639ab0b7c9">
+		<input type="rect"/>
+		<consequent>
+			<consequent>
+				<run>powerline_osm_import</run>
+			</consequent>
+			<consequent lock_cells="infrastructure_line:powerline">
+				<run>powerline_generator</run>
+			</consequent>
+		</consequent>
+	</scenario>
+<!--	Bridge-->
+	<scenario name="generate_bridge" uuid="10386012-b05f-4bc6-b4e0-93d4c7b8694d" notify="generate_bridge">
+		<consequent lock_cells="infrastructure_line:bridge">
+			<run>bridge_generator</run>
+		</consequent>
+	</scenario>
+	<scenario name="bridge_osm_import" uuid="f1c7d746-b18c-4c6d-8fbd-daa584e63b99">
+		<input type="rect"/>
+		<consequent>
+			<consequent>
+				<run>bridge_osm_import</run>
+			</consequent>
+			<consequent lock_cells="infrastructure_line:bridge">
+				<run>bridge_generator</run>
+			</consequent>
+		</consequent>
+	</scenario>
+	<scenario name="il_import" uuid="0284bc7a-dce4-40ad-8c3e-b025cd925454">
+		<input type="rect"/>
+		<consequent>
+			<concurrent>
+				<run>road_osm_import</run>
+				<!-- <run>fence_generator</run> -->
+				<run>powerline_osm_import</run>
+				<run>bridge_osm_import</run>
+			</concurrent>
+			<concurrent lock_cells="infrastructure_line:road,fence,bridge">
+				<run>road_generator</run>
+				<!-- <run>fence_generator</run> -->
+				<run>powerline_generator</run>
+				<run>bridge_generator</run>
+			</concurrent>
+		</consequent>
+	</scenario>
 </config>

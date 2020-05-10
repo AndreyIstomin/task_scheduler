@@ -8,11 +8,13 @@ from jsonschema import validate, ValidationError
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
 from LandscapeEditor.road.common import IL_SUBTYPE
 from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
-from LandscapeEditor.road import RoadGenerator, RoadOSMImportGenerator, FenceGenerator, FenceOSMImportGenerator
+from LandscapeEditor.road import RoadGenerator, RoadOSMImportGenerator, FenceGenerator, FenceOSMImportGenerator, \
+    PowerlineGenerator, PowerlineOSMImportGenerator, BridgeGenerator, BridgeOSMImportGenerator
 from backend.task_scheduler_service import RPCRegistry, GeneratorAdapter, ResponseObject, RPCConsumer
 
 __all__ = ['RPCRoadGenerator', 'RPCRoadOSMImport',
            'RPCFenceGenerator', 'RPCFenceOSMImport',
+           'RPCPowerlineGenerator', 'RPCPowerlineOSMImport',
            'TestConsumerA', 'TestConsumerB', 'TestConsumerC', 'TestConsumerD']
 
 
@@ -37,6 +39,30 @@ class RPCFenceOSMImport(GeneratorAdapter, generator_class=FenceOSMImportGenerato
 @RPCRegistry.is_consumer('fence_generator')
 class RPCFenceGenerator(GeneratorAdapter, generator_class=FenceGenerator, raise_on_close_request=True,
                         heartbit_timeout=600):
+    pass
+
+
+@RPCRegistry.is_consumer('powerline_osm_import')
+class RPCPowerlineOSMImport(GeneratorAdapter, generator_class=PowerlineOSMImportGenerator, raise_on_close_request=True,
+                            heartbit_timeout=3600):
+    pass
+
+
+@RPCRegistry.is_consumer('powerline_generator')
+class RPCPowerlineGenerator(GeneratorAdapter, generator_class=PowerlineGenerator, raise_on_close_request=True,
+                            heartbit_timeout=600):
+    pass
+
+
+@RPCRegistry.is_consumer('bridge_osm_import')
+class RPCBridgeOSMImport(GeneratorAdapter, generator_class=BridgeOSMImportGenerator, raise_on_close_request=True,
+                         heartbit_timeout=3600):
+    pass
+
+
+@RPCRegistry.is_consumer('bridge_generator')
+class RPCBridgeGenerator(GeneratorAdapter, generator_class=BridgeGenerator, raise_on_close_request=True,
+                         heartbit_timeout=600):
     pass
 
 

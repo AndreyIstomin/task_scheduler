@@ -100,8 +100,10 @@ def init(scenario_provider: ScenarioProvider):
     # route part
     app.add_routes([
         web.post(SERVICE_CONFIG['task_scheduler_service']['run_task_url'], run_task),
-        web.post(SERVICE_CONFIG['generator_service']['import_road_url'], partial(run_task_by_id, task_id=get_id('road_osm_import'))),
-        web.post(SERVICE_CONFIG['generator_service']['import_fence_url'], partial(run_task_by_id, task_id=get_id('fence_osm_import')))
+        web.post(SERVICE_CONFIG['task_scheduler_service']['import_road_url'], partial(run_task_by_id, task_id=get_id('road_osm_import'))),
+        web.post(SERVICE_CONFIG['task_scheduler_service']['import_fence_url'], partial(run_task_by_id, task_id=get_id('fence_osm_import'))),
+        web.post(SERVICE_CONFIG['task_scheduler_service']['import_power_line_url'], partial(run_task_by_id, task_id=get_id('powerline_osm_import'))),
+        web.post(SERVICE_CONFIG['task_scheduler_service']['import_bridge_url'], partial(run_task_by_id, task_id=get_id('bridge_osm_import')))
     ])
 
     for route in routes:
