@@ -37,7 +37,7 @@ async def run_task(request):
         return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
 
 
-async def run_task_by_name(request, task_id: uuid.UUID):
+async def run_task_by_id(request, task_id: uuid.UUID):
 
     try:
         data = await request.json()
