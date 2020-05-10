@@ -15,6 +15,8 @@
 			</concurrent>
 		</consequent>
 	</scenario>
+<!--	Infrastructure line-->
+<!--	Road-->
     <scenario name="generate_road" uuid="c4318806-0971-4684-80c0-e6241aa6eb86" notify="generate_road">
 		<consequent lock_cells="infrastructure_line:road">
 			<run>road_generator</run>
@@ -31,4 +33,22 @@
 			</consequent>
 		</consequent>
 	</scenario>
+<!--	Fence-->
+	<scenario name="generate_fence" uuid="e60cf4aa-fbb7-4ee4-a7d3-63e9f34335d5" notify="generate_fence">
+		<consequent lock_cells="infrastructure_line:fence">
+			<run>fence_generator</run>
+		</consequent>
+	</scenario>
+	<scenario name="fence_osm_import" uuid="7e28a566-d3c6-4730-8387-d384cb72d80b">
+		<input type="rect"/>
+		<consequent>
+			<consequent>
+				<run>fence_osm_import</run>
+			</consequent>
+			<consequent lock_cells="infrastructure_line:fence">
+				<run>fence_generator</run>
+			</consequent>
+		</consequent>
+	</scenario>
+
 </config>

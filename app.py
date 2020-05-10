@@ -37,7 +37,7 @@ async def run_task(request):
         return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
 
 
-async def run_task_by_id(request, task_id: uuid.UUID):
+async def run_task_by_name(request, task_id: uuid.UUID):
 
     try:
         data = await request.json()
@@ -53,11 +53,9 @@ async def run_task_by_id(request, task_id: uuid.UUID):
     ok, msg = await task_manager.start_task(task_id, payload=data)
 
     if ok:
-        return web.Response(status=web.HTTPOk.status_code, text=f"Task {data['task_id']} has been created by {data['username']}")
+        return web.Response(status=web.HTTPOk.status_code, text=f"Task {task_id} has been created by {data['username']}")
     else:
         return web.Response(status=web.HTTPInternalServerError.status_code, text=msg)
-
-
 
 
 # async def stop_task(request):
@@ -102,7 +100,8 @@ def init(scenario_provider: ScenarioProvider):
     # route part
     app.add_routes([
         web.post(SERVICE_CONFIG['task_scheduler_service']['run_task_url'], run_task),
-        web.post(SERVICE_CONFIG['generator_service']['import_road_url'], partial(run_task_by_id, task_id=get_id('road_osm_import')))
+        web.post(SERVICE_CONFIG['generator_service']['import_road_url'], partial(run_task_by_id, task_id=get_id('road_osm_import'))),
+        web.post(SERVICE_CONFIG['generator_service']['import_fence_url'], partial(run_task_by_id, task_id=get_id('fence_osm_import')))
     ])
 
     for route in routes:

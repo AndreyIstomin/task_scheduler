@@ -8,10 +8,18 @@ from jsonschema import validate, ValidationError
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
 from LandscapeEditor.road.common import IL_SUBTYPE
 from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
-from LandscapeEditor.road import RoadGenerator, RoadOSMImportGenerator
+from LandscapeEditor.road import RoadGenerator, RoadOSMImportGenerator, FenceGenerator, FenceOSMImportGenerator
 from backend.task_scheduler_service import RPCRegistry, GeneratorAdapter, ResponseObject, RPCConsumer
 
-__all__ = ['RPCRoadGenerator', 'TestConsumerA', 'TestConsumerB', 'TestConsumerC', 'TestConsumerD']
+__all__ = ['RPCRoadGenerator', 'RPCRoadOSMImport',
+           'RPCFenceGenerator', 'RPCFenceOSMImport',
+           'TestConsumerA', 'TestConsumerB', 'TestConsumerC', 'TestConsumerD']
+
+
+@RPCRegistry.is_consumer('road_osm_import')
+class RPCRoadOSMImport(GeneratorAdapter, generator_class=RoadOSMImportGenerator, raise_on_close_request=True,
+                       heartbit_timeout=3600):
+    pass
 
 
 @RPCRegistry.is_consumer('road_generator')
@@ -20,9 +28,15 @@ class RPCRoadGenerator(GeneratorAdapter, generator_class=RoadGenerator, raise_on
     pass
 
 
-@RPCRegistry.is_consumer('road_osm_import')
-class RPCRoadOSMImport(GeneratorAdapter, generator_class=RoadOSMImportGenerator, raise_on_close_request=True,
-                       heartbit_timeout=3600):
+@RPCRegistry.is_consumer('fence_osm_import')
+class RPCFenceOSMImport(GeneratorAdapter, generator_class=FenceOSMImportGenerator, raise_on_close_request=True,
+                        heartbit_timeout=3600):
+    pass
+
+
+@RPCRegistry.is_consumer('fence_generator')
+class RPCFenceGenerator(GeneratorAdapter, generator_class=FenceGenerator, raise_on_close_request=True,
+                        heartbit_timeout=600):
     pass
 
 

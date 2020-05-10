@@ -1,5 +1,6 @@
 import json
 import pika
+import sys,traceback
 from abc import ABC, abstractmethod
 from typing import *
 from PluginEngine import Log, ProgressInterface
@@ -242,9 +243,14 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self.notify_task_failed(f'Interrupted by {user}')
 
         except Exception as err:
-            Log.error(f"Consumer {self.get_routing_key()} {type(err).__name__}: {str(err)}")
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            err_msg = "Consumer {key}\n{exc_info}".format(
+                key=self.get_routing_key(),
+                exc_info='\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+            )
+            Log.error(err_msg)
 
-            self.notify_task_failed(f'{type(err).__name__}: {err}')
+            self.notify_task_failed(err_msg)
         finally:
             if not self._failed:
                 self._publish_completed()
