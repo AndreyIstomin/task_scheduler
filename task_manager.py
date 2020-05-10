@@ -132,7 +132,7 @@ class TaskManager(TaskManagerInterface):
         ok, msg = task.load(provider=self._scenario_provider)  # TODO ???
         if ok:
             self._tasks[task_uuid] = TaskData(task)
-            asyncio.create_task(task.run())
+            asyncio.get_event_loop().create_task(task.run())
 
         else:
             self._task_logger.error(msg)
