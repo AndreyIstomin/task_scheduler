@@ -5,12 +5,10 @@ import uuid
 from typing import *
 from copy import copy
 from jsonschema import validate, ValidationError
-from multiprocessing import Process, Pool
-from dataclasses import dataclass, asdict
+from multiprocessing import Process
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSettings
 from PluginEngine import quadtree
-from PluginEngine.glsl_types import vec2
 from LandscapeEditor.backend.schemas import LON_LAT_RECT_PROPERTY, CELL_LIST_ARGS_PROPERTY
 from backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service import ScenarioProvider
@@ -25,12 +23,16 @@ API launcher v1.0.0
     """)
 
 
-@dataclass
 class Rect:
-    lon_min: float
-    lon_max: float
-    lat_min: float
-    lat_max: float
+    def __init__(self, lon_min: float, lon_max: float, lat_min: float, lat_max: float):
+        self.lon_min = lon_min
+        self.lon_max = lon_max
+        self.lat_min = lat_min
+        self.lat_max = lat_max
+
+    def to_dict(self):
+        return {'lon_min': self.lon_min, 'lon_max': self.lon_max,
+                'lat_min': self.lat_min, 'lat_max': self.lat_max}
 
 
 class Core:
@@ -50,7 +52,7 @@ class Core:
         for i in range(2 ** div_pow):
             lon_min = rect.lon_min
             for j in range(2 ** div_pow):
-                payload_arr[pos]['rect'] = asdict(Rect(lon_min, lon_min + step_lon, lat_min, lat_min + step_lat))
+                payload_arr[pos]['rect'] = Rect(lon_min, lon_min + step_lon, lat_min, lat_min + step_lat).to_dict()
                 lon_min += step_lon
                 pos += 1
             lat_min += step_lat
