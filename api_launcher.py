@@ -109,9 +109,19 @@ class APILauncherApp(QtWidgets.QDialog):
         scenario_provider = ScenarioProvider()
         scenario_provider.load()
 
+        def create_callback(task_id_: str):
+
+            def callback():
+                return self._request(task_id_)
+
+            return callback
+
         for task_id, scenario in scenario_provider._scenarios.items():
-            self.buttons.append(QtWidgets.QPushButton(f'&{scenario.name()}'))
-            self.buttons[-1].clicked.connect(lambda: self._request(task_id))
+            new_btn = QtWidgets.QPushButton(f'&{scenario.name()}')
+            new_btn.clicked.connect(create_callback(str(task_id)))
+
+            self.buttons.append(new_btn)
+
 
         self._n_req = QtWidgets.QSpinBox(self)
         self._n_req.setMinimum(1)
@@ -194,10 +204,10 @@ class APILauncherApp(QtWidgets.QDialog):
         msg_box.setText(msg)
         msg_box.exec()
 
-    def _request(self, task_id: uuid.UUID):
+    def _request(self, task_id_: str):
 
         payload = {'username': self._username,
-                   'task_id': str(task_id)}
+                   'task_id': task_id_}
 
         if not self._external_input:
             self._rect = None

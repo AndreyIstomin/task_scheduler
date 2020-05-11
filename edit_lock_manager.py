@@ -20,15 +20,13 @@ class HistoryRow:
     """
     TODO: dataclass should be used
     """
-    def __init__(self, id: int, qtree_id: int, type_id: int, subtype_id: int, changed: datetime, lock_id: int,
-                 completed: bool):
+    def __init__(self, id: int, qtree_id: int, type_id: int, subtype_id: int, changed: datetime, lock_id: int):
         self.id = id
         self.qtree_id = qtree_id
         self.type_id = type_id
         self.subtype_id = subtype_id
         self.changed = changed
         self.lock_id = lock_id
-        self.completed = completed
 
 
 class EditLockManager(EditLockManagerInterface):
@@ -40,29 +38,14 @@ class EditLockManager(EditLockManagerInterface):
         self._cell_history = []
         self._table = ['edit_history_transient']
 
-    def sync(self):
         with UseDatabase(self._db_handler.connection_config()) as cursor:
 
-            completed = ','.join(str(item.id) for item in self._cell_history if item.completed)
-            if completed:
-                _SQL = f"""DELETE FROM {self._table[0]} WHERE id in ({completed})"""
-                cursor.execute(_SQL)
-
-            cell_history = [item for item in self._cell_history if not item.completed]
-            self._cell_history = cell_history
-
-            _SQL = f"""SELECT *, 0 as lock_id, false as completed FROM {self._table[0]}"""
-
+            _SQL = f"""UPDATE {self._table[0]} SET lock_id = 0"""
             cursor.execute(_SQL)
 
-            for item in cursor:
-                self._cell_history.append(HistoryRow(*item))
-
-        # self._log_cell_history()
 
     def get_affected_cells(self, obj_types: list) -> LockedCells:
 
-        self.sync()
         return self._lock_cells(obj_types)
 
     def get_affected_objects(self, obj_types: list) -> LockedObjects:
@@ -75,42 +58,60 @@ class EditLockManager(EditLockManagerInterface):
         self._lock_id += 1
         lock_id = self._lock_id
         cells = {}
+
+        only_types = []
+        pairs = []
+
         for type_id, subtypes in obj_types:
             if subtypes:
-                for subtype_id in subtypes:
-                    self._lock_cells_by_subtype(type_id, subtype_id, cells)
+                pairs.extend(f'({type_id}, {subtype_id})' for subtype_id in subtypes)
             else:
-                self._lock_cells_by_type(type_id, cells)
+                only_types.append(str(type_id))
+
+        with UseDatabase(self._db_handler.connection_config()) as cursor:
+
+            _only_types = ', '.join(only_types)
+            _pairs = ', '.join(pairs)
+
+            conditions = []
+            if pairs:
+                conditions.append(f'(type_id, subtype_id) in ({_pairs})')
+            if only_types:
+                conditions.append(f'type_id in ({_only_types})')
+
+            cond = ' OR '.join(conditions)
+
+            _SQL = f"""
+WITH updated AS(
+    UPDATE {self._table[0]} SET lock_id = {lock_id} 
+    WHERE  ({cond})
+    AND lock_id = 0
+    RETURNING id)
+SELECT * FROM {self._table[0]} WHERE id IN (SELECT id FROM updated)  
+"""
+            cursor.execute(_SQL)
+
+            cells = {}
+            for item in cursor:
+                row = HistoryRow(*item)
+                d = cells.setdefault(row.type_id, {})
+                li = d.setdefault(row.subtype_id, [])
+                li.append(quadtree.make_cell_by_raw_index(row.qtree_id + MINIMUM_BIGINT_VALUE))
 
         return LockedCells(cells, lambda x: self._unlock_cells(lock_id, x))
 
-    def _lock_cells_by_subtype(self, type_id: int, subtype_id: int, cells: CellMap):
-        ls = []
-
-        for row in self._cell_history:
-            if not row.lock_id and not row.completed and (row.type_id, row.subtype_id) == (type_id, subtype_id):
-                row.lock_id = self._lock_id
-                ls.append(quadtree.make_cell_by_raw_index(row.qtree_id + MINIMUM_BIGINT_VALUE))
-        if ls:
-            d = cells.setdefault(type_id, {})
-            d[subtype_id] = ls
-
-    def _lock_cells_by_type(self, type_id: int, cells: CellMap):
-        d = {}
-        for row in self._cell_history:
-            if not row.lock_id and not row.completed and row.type_id == type_id:
-                row.lock_id = self._lock_id
-                ls = d.setdefault(row.subtype_id, [])
-                ls.append(quadtree.make_cell_by_raw_index(row.qtree_id + MINIMUM_BIGINT_VALUE))
-        if d:
-            cells[type_id] = d
-
     def _unlock_cells(self, lock_id: int, completed: bool):
-        for item in self._cell_history:
-            if item.lock_id == lock_id:
-                item.lock_id = 0
-                item.completed = completed
-        self.sync()
+
+        with UseDatabase(self._db_handler.connection_config()) as cursor:
+
+            if completed:
+                _SQL = f"""DELETE FROM {self._table[0]} WHERE lock_id = {lock_id}"""
+
+            else:
+                _SQL = f"""UPDATE {self._table[0]} SET lock_id = 0 WHERE lock_id = {lock_id}"""
+
+            cursor.execute(_SQL)
+
 
     def _log_cell_history(self, log_level=Log.TRACE):
 
