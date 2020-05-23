@@ -261,7 +261,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
 
     def _check_close_requested(self):
         if self.is_close_requested():
-            raise CloseRequestException()
+            raise CloseRequestException(f'Interrupted by {self.input().username()}')
 
     @classmethod
     def get_routing_key(cls):
