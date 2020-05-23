@@ -68,7 +68,7 @@ def uuid_to_array(arr: Array, _uuid: uuid.UUID):
     return arr
 
 
-def shorten_uuid(_uuid: uuid.UUID):
+def shorten_uuid(_uuid: Union[uuid.UUID, str]):
 
     return str(_uuid)[0:8]
 

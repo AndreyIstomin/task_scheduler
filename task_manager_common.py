@@ -154,8 +154,16 @@ class Task(TaskInterface):
     Provide access to the task's context: state, payload, running task manager, etc.
     """
 
-    def __init__(self, task_uuid: uuid.UUID, task_id: uuid.UUID, payload: dict, task_manager: TaskManagerInterface,
+    def __init__(self, task_uuid: uuid.UUID, task_id: uuid.UUID, payload: Dict[str, Any], task_manager: TaskManagerInterface,
                  lock_manager: EditLockManagerInterface):
+
+        """
+        :param task_uuid: assigned to the given task by task manager
+        :param task_id: UUID of this type of tasks in scenario file
+        :param payload: initial payload provided by the API request
+        :param task_manager: reference to the TaskManager instance
+        :param lock_manager: reference to the EditLockManager instance
+        """
 
         require(isinstance(task_id, uuid.UUID))
         self._uuid = task_uuid
@@ -243,14 +251,17 @@ class TaskData:
     def set_waiting(self):
         if self._status <= TaskStatus.WAITING:
             self._status = TaskStatus.WAITING
+            self.message = 'waiting'
 
     def set_in_progress(self):
         if self._status <= TaskStatus.IN_PROGRESS:
             self._status = TaskStatus.IN_PROGRESS
+            self.message = 'in progress'
 
     def set_closed(self):
         if self._status != TaskStatus.FAILED:
             self._status = TaskStatus.COMPLETED
+            self.message = 'completed'
 
     def set_failed(self, msg=None):
         require(self._status != TaskStatus.COMPLETED)

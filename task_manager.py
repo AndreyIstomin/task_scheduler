@@ -41,7 +41,7 @@ class TaskManager(TaskManagerInterface):
         self._closed_tasks = []
         self._scenario_provider = scenario_provider
         self._lock_manager = lock_manager
-        self._task_logger = task_logger
+        self._event_logger = task_logger
         self._rpc_manager = None
         self._amqp_url = amqp_url
 
@@ -65,7 +65,7 @@ class TaskManager(TaskManagerInterface):
         task_started = False
         timeout = TaskManager.START_TIMEOUT  # TODO
 
-        self._task_logger.new_task(task_data)
+        self._event_logger.new_task(task_data)
 
         while True:
 
@@ -107,7 +107,7 @@ class TaskManager(TaskManagerInterface):
 
             finally:
                 self.process_close_requests(rpc)
-                self._task_logger.update_task(task_data)
+                self._event_logger.update_task(task_data)
 
     def notify_task_closed(self, task_uuid: uuid.UUID):
 
@@ -119,7 +119,8 @@ class TaskManager(TaskManagerInterface):
 
             task_data = self._tasks[task_uuid]
             task_data.set_closed()
-            self._task_logger.update_task(task_data)
+            self._event_logger.notify_task_closed(task_uuid)
+            self._event_logger.update_task(task_data)
             self._closed_tasks = task_data
             del self._tasks[task_uuid]
 
@@ -135,7 +136,7 @@ class TaskManager(TaskManagerInterface):
             asyncio.get_event_loop().create_task(task.run())
 
         else:
-            self._task_logger.error(msg)
+            self._event_logger.error(msg)
 
         self._log_task_info()
 
@@ -171,14 +172,14 @@ class TaskManager(TaskManagerInterface):
         if response.request_id not in self._requests:
             msg = f'Unknown request id: {response.request_id}'
             Log.warn(msg)
-            self._task_logger.warning(msg)
+            self._event_logger.warning(msg)
             return
 
         req_data = self._requests[response.request_id]
         if req_data.task_uuid not in self._tasks:
             msg = f'Unknown task id: {req_data.task_uuid}'
             Log.warn(msg)
-            self._task_logger.warning(msg)
+            self._event_logger.warning(msg)
             return
 
         req_data.queue.put_nowait(response)
@@ -198,7 +199,7 @@ class TaskManager(TaskManagerInterface):
         ok, msg = self._rpc_manager.close_request(rpc.uuid, req.username)
         require(ok)
 
-        self._task_logger.update_close_request(req)
+        self._event_logger.update_close_request(req)
 
         self._log_close_requests_info()
         return ok, msg
@@ -208,11 +209,12 @@ class TaskManager(TaskManagerInterface):
         if rpc.uuid not in self._close_requests:
             return
 
-        req = self._close_requests[rpc.uuid]
+        req: CloseRequest = self._close_requests[rpc.uuid]
 
         if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
             req.set_completed()
             self._rpc_manager.notify_task_closed(rpc.uuid, req.username)
+            self._event_logger.notify_task_closed(req.uuid)
             del self._close_requests[rpc.uuid]
 
         elif rpc.status == RPCStatus.IN_PROGRESS:
@@ -222,7 +224,7 @@ class TaskManager(TaskManagerInterface):
                 # require(ok)
                 req.set_in_progress()
 
-        self._task_logger.update_close_request(req)
+        self._event_logger.update_close_request(req)
 
         self._log_close_requests_info()
 
@@ -233,7 +235,7 @@ class TaskManager(TaskManagerInterface):
 
         self._rpc_manager = RPCManager(RPCManager.CLIENT, amqp_url=self._amqp_url,
                                        reply_callback=self.update_task_status,
-                                       error_callback=self.ErrorCallbackHandler(self._task_logger))
+                                       error_callback=self.ErrorCallbackHandler(self._event_logger))
 
         self._rpc_manager.run_async(io_loop)
 

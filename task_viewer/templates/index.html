@@ -1,8 +1,9 @@
-{% macro random_int(len) -%}
-  {% for n in range(len) %}
-    {{ [0,1,2,3,4,5,6,7,8,9]|random }}
-  {% endfor %}
-{%- endmacro %}
+{%- macro random_int(len) -%}
+  {%- for _ in range(len) -%}
+    {{ range(10) | random }}
+  {%- endfor -%}
+{%- endmacro -%}
+
 
 {% extends 'base.html' %}
 
@@ -11,15 +12,19 @@ Event desk
 {% endblock %}
 
 {% block head %}
+<script src="{{ static('js/main.js') }}?rndstr={{ random_int(10) }}"></script>
 {% endblock %}
 {% block content %}
 
 <div id="subscribe">
-
+<!--    {% for mes in messages%}-->
+<!--        <p>[{{ mes['time'].strftime('%H:%M:%S') }}] ({{ mes['user'] }}) {{ mes['msg'] }}</p>-->
+<!--    {% endfor %}-->
+</div>
+<div id="loadMore" style="" class="list-group">
+ <a class="list-group-item">Load More</a>
 </div>
 {% endblock %}
 
 {% block footer %}
-    <script src="{{ static('js/main.js') }}?rndstr={{random_int(5)}}"></script>
-
 {% endblock %}

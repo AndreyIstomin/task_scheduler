@@ -55,9 +55,17 @@ CMD_MESSAGE_SCHEMA = {
         "type": "string"
     },
 
+    "count": {
+        "type": "number"
+    },
+
+    "less_than": {
+        "type": "number"
+    },
+
     "username": USERNAME_PROPERTY,
 
-    "required": ["cmd", "request_id", "username"]
+    "required": ["cmd"]
 }
 
 SOCKET_MESSAGE_SCHEMA = CMD_MESSAGE_SCHEMA

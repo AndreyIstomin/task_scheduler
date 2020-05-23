@@ -118,22 +118,29 @@ def init(scenario_provider: ScenarioProvider):
 
 
 if __name__ == '__main__':
-    db_handler = create_db_handler()
 
-    sp = ScenarioProvider()
-    sp.load()
+    logger = None
+    try:
+        db_handler = create_db_handler()
 
-    the_app = init(sp)
-    logger = TaskLogger(the_app)
+        sp = ScenarioProvider()
+        sp.load()
 
-    edit_lock_manager = EditLockManager(db_handler)
+        the_app = init(sp)
+        logger = TaskLogger(the_app)
+        edit_lock_manager = EditLockManager(db_handler)
 
-    task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], sp,
-                               edit_lock_manager, logger)
-    task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
+        task_manager = TaskManager(SERVICE_CONFIG['task_scheduler_service']['amqp_url'], sp,
+                                   edit_lock_manager, logger)
+        task_manager.run_in_external_ioloop(web.asyncio.get_event_loop())
 
-    the_app['task_manager'] = task_manager  # xz xz ...
+        the_app['task_manager'] = task_manager
+        the_app['logger'] = logger
 
-    web.run_app(the_app,
-                host=SERVICE_CONFIG['task_scheduler_service']['IP'],
-                port=SERVICE_CONFIG['task_scheduler_service']['port'])
+        web.run_app(the_app,
+                    host=SERVICE_CONFIG['task_scheduler_service']['IP'],
+                    port=SERVICE_CONFIG['task_scheduler_service']['port'])
+
+    finally:
+        if logger:
+            logger.close()

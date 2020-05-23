@@ -24,7 +24,7 @@ from backend.task_scheduler_service.scenario_common import Scenario, ExecutableN
 
 class CMDTypeEnum:
 
-    OK, CLOSE_TASK, NOTIFY_TASK_CLOSED = __list = range(3)
+    OK, CLOSE_TASK, NOTIFY_TASK_CLOSED, LOAD_LOG = __list = range(4)
 
     def __iter__(self):
         return self.__list.__iter__()

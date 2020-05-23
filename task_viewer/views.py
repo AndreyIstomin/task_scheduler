@@ -13,12 +13,13 @@ from backend.task_scheduler_service.schemas import SOCKET_MESSAGE_SCHEMA
 class ChatList(web.View):
     @aiohttp_jinja2.template('index.html')
     async def get(self):
+        pass
         # message = Message(self.request)
         # messages = await message.get_messages()
-        return {'messages': [
-            # {'user': 'user1', 'msg': 'hello', 'time': datetime.now()},
-            # {'user': 'user1', 'msg': 'world', 'time': datetime.now()}
-        ] }
+        # return {'messages': [
+        #     {'user': 'user1', 'msg': 'hello', 'time': datetime.now()},
+        #     {'user': 'user1', 'msg': 'world', 'time': datetime.now()}
+        # ] }
 
 
 class WebSocket(web.View):
@@ -35,15 +36,18 @@ class WebSocket(web.View):
         self.request.app['websockets'].append(ws)
 
         async for msg in ws:
-            if msg == 'close':
+
+            if msg.data == 'close':
                 await ws.close()
             else:
                 try:
                     cmd = json.loads(msg.data)
                     jsonschema.validate(SOCKET_MESSAGE_SCHEMA, cmd)
                     if cmd['cmd'] == CMDType.CLOSE_TASK:
-                        self.request.app['task_manager'].request_stop_task(task_uuid=uuid.UUID(cmd['request_id']),
-                                                                           username=cmd['username'])
+                        self.request.app['task_manager'].request_stop_task(
+                            task_uuid=uuid.UUID(cmd['request_id']), username=cmd['username'])
+                    elif cmd['cmd'] == CMDType.LOAD_LOG:
+                        await self.request.app['logger'].load_log(ws, cmd['count'], cmd['less_than'])
                     else:
                         Log.error(f'Unsupported cmd: {cmd}')
                 except json.JSONDecodeError as err:
@@ -61,7 +65,7 @@ class WebSocket(web.View):
 
         self.request.app['websockets'].remove(ws)
         for _ws in self.request.app['websockets']:
-            _ws.send_str('disconected')
+            await _ws.send_str('disconected')
         Log.debug('websocket connection closed')
 
         return ws
