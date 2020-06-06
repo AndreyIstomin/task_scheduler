@@ -101,7 +101,7 @@ class TaskManager(TaskManagerInterface):
                 # The place for request's thread termination
                 rpc.set_failed()
                 rpc.message = f'heartbit timeout {timeout} seconds has been reached'
-                task_data.set_failed()
+                task_data.set_failed(msg=rpc.message)
                 self.request_stop_task(task_uuid, task_input.username())
                 continue
 
