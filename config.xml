@@ -1,20 +1,5 @@
 <?xml version="1.1" encoding="UTF-8" ?>
 <config>
-    <scenario name="test_scenario_1" uuid="5c4d1b14-ce95-44d3-b946-04ec7b9f0bce">
-		<input type="rect" />
-		<consequent>
-			<consequent lock_cells="infrastructure_line">
-<!--            <run>consumer_A</run>-->
-<!--            <run>consumer_B</run>-->
-				<run>consumer_B</run>
-			</consequent>
-			<concurrent lock_cells="infrastructure_line:road, powerline, fence;tree">
-				<run>consumer_A</run>
-				<run>consumer_A</run>
-				<run>consumer_B</run>
-			</concurrent>
-		</consequent>
-	</scenario>
 <!--	Infrastructure line-->
 <!--	Road-->
     <scenario name="generate_road" uuid="c4318806-0971-4684-80c0-e6241aa6eb86" notify="generate_road">

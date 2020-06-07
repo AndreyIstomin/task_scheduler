@@ -12,18 +12,24 @@ from backend.task_scheduler_service import ExamplePublisher, ExampleConsumer
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')
 LOGGER = logging.getLogger('async_publisher')
+LOGGER.setLevel(logging.WARN)
 
 
 class SchedulerAsyncConsumer(ExampleConsumer):
 
-    EXCHANGE = 'message'
-    EXCHANGE_TYPE = 'direct'
-    QUEUE = 'reply-to-queue'
-    ROUTING_KEY = 'feedback'
+
+
+    EXCHANGE = ''
+    EXCHANGE_TYPE = ''
+    QUEUE = ''
+    ROUTING_KEY = ''
 
     def __init__(self, amqp_url: str, on_message_callback):
         ExampleConsumer.__init__(self, amqp_url)
         self._on_message_callback = on_message_callback
+
+    def channel(self):
+        return self._channel
 
     def on_message(self, channel, basic_deliver, properties, body):
         """Invoked by pika when a message is delivered from RabbitMQ. The
@@ -40,7 +46,7 @@ class SchedulerAsyncConsumer(ExampleConsumer):
 
         """
 
-        self._on_message_callback(body)
+        self._on_message_callback(body, properties.correlation_id)
 
         LOGGER.info('Received message # %s from %s: %s',
                     basic_deliver.delivery_tag, properties.app_id, body)
@@ -68,6 +74,7 @@ class SchedulerAsyncConsumer(ExampleConsumer):
 
 class SchedulerAsyncPublisher(ExamplePublisher):
 
+    REPLY_QUEUE = 'reply-to-queue'
     REPLY_ROUTING_KEY = 'feedback'
 
     def __init__(self, amqp_url: str, feedback_callback, exchange):
@@ -94,6 +101,7 @@ class SchedulerAsyncPublisher(ExamplePublisher):
         self._connection = self.connect(custom_ioloop=ioloop)
 
         self._feedback_consumer = SchedulerAsyncConsumer(self._url, self._feedback_callback)
+        self._feedback_consumer.QUEUE = self.REPLY_QUEUE
         self._feedback_consumer.EXCHANGE = self.EXCHANGE
         self._feedback_consumer.EXCHANGE_TYPE = 'direct'
         self._feedback_consumer.ROUTING_KEY = self.REPLY_ROUTING_KEY

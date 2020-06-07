@@ -1,5 +1,6 @@
 import uuid
 import asyncio
+from time import time
 from collections import namedtuple
 from PluginEngine import Log
 from PluginEngine.asserts import require
@@ -7,6 +8,7 @@ from LandscapeEditor.backend import TaskInputInterface
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
     RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
 from backend.task_scheduler_service.common import TaskManagerInterface, EditLockManagerInterface
+from backend import SERVICE_CONFIG
 
 
 RequestData = namedtuple('RequestData', 'task_uuid, queue')
@@ -35,6 +37,9 @@ class TaskManager(TaskManagerInterface):
     def __init__(self, amqp_url: str, scenario_provider: ScenarioProvider, lock_manager: EditLockManagerInterface,
                  task_logger: TaskLogger):
 
+        TaskManager.START_TIMEOUT = int(SERVICE_CONFIG['task_scheduler_service']['start_timeout'])
+        TaskManager.CLOSE_TIMEOUT = int(SERVICE_CONFIG['task_scheduler_service']['close_timeout'])
+        TaskManager.TERMINATE_TIMEOUT = int(SERVICE_CONFIG['task_scheduler_service']['terminate_timeout'])
         self._tasks = {}
         self._requests = {}
         self._close_requests = {}
@@ -184,6 +189,17 @@ class TaskManager(TaskManagerInterface):
 
         req_data.queue.put_nowait(response)
 
+    def tear_down_request(self, request_id: uuid.UUID):
+
+        if request_id in self._requests:
+            response = ResponseObject(str(request_id), ResponseStatus.FAILED, progress=1.0,
+                                      message='Tear down from server side')
+            self._requests[request_id].queue.put_nowait(response)
+        else:
+            msg = f'Attempt to tear down unknown request: {request_id}'
+            Log.warn(msg)
+            self._event_logger.warning(msg)
+
     def start_close_request(self, rpc: RPCData, username: str):
 
         require(rpc.status in (RPCStatus.IN_PROGRESS, RPCStatus.WAITING))
@@ -191,8 +207,10 @@ class TaskManager(TaskManagerInterface):
         task = self._tasks[self._requests[rpc.uuid].task_uuid].task
 
         req = self._close_requests[rpc.uuid] = CloseRequest(task_uuid=self._requests[rpc.uuid].task_uuid,
+                                                            rpc_uuid=rpc.uuid,
                                                             task_name=task.name(),
-                                                            username=username)
+                                                            username=username,
+                                                            queue=asyncio.Queue())
         Log.trace('new close request')
         self._log_close_requests_info()
 
@@ -200,6 +218,8 @@ class TaskManager(TaskManagerInterface):
         require(ok)
 
         self._event_logger.update_close_request(req)
+
+        asyncio.get_running_loop().create_task(self._run_close_request(req, rpc))
 
         self._log_close_requests_info()
         return ok, msg
@@ -212,24 +232,68 @@ class TaskManager(TaskManagerInterface):
         req: CloseRequest = self._close_requests[rpc.uuid]
 
         if rpc.status in (RPCStatus.COMPLETED, RPCStatus.FAILED):
-            req.set_completed()
-            self._rpc_manager.notify_task_closed(rpc.uuid, req.username)
-            self._event_logger.notify_task_closed(req.uuid)
-            del self._close_requests[rpc.uuid]
+
+            req.queue.put_nowait(RPCStatus.COMPLETED)
+
 
         elif rpc.status == RPCStatus.IN_PROGRESS:
-            if not req.in_progress():
 
-                # ok, msg = self._rpc_manager.close_request(rpc.uuid, req.username)
-                # require(ok)
-                req.set_in_progress()
+            req.queue.put_nowait(RPCStatus.IN_PROGRESS)
 
-        self._event_logger.update_close_request(req)
-
-        self._log_close_requests_info()
 
     def is_close_requested(self, rpc: RPCData):
         return rpc.uuid in self._close_requests
+
+    async def _run_close_request(self, req: CloseRequest, rpc: RPCData):
+
+        if rpc.status == RPCStatus.WAITING:
+            in_progress = False
+            timeout = TaskManager.START_TIMEOUT  # Wait as long as the request is waited to start
+        else:
+            in_progress = True
+            timeout = TaskManager.CLOSE_TIMEOUT
+
+        termination_requested = False
+
+        while True:
+            begin = time()
+            try:
+
+                rsp = await asyncio.wait_for(req.queue.get(), timeout)
+
+                if rsp == RPCStatus.IN_PROGRESS:
+                    req.set_in_progress()
+                    if not in_progress:
+                        in_progress = True
+                        timeout = TaskManager.CLOSE_TIMEOUT
+                    else:
+                        timeout -= time() - begin
+
+                elif rsp == RPCStatus.COMPLETED:
+                    req.set_completed()
+                    self._rpc_manager.notify_task_closed(req.rpc_uuid, req.username)
+                    self._event_logger.notify_task_closed(req.uuid)
+                    del self._close_requests[req.rpc_uuid]
+                    break
+
+            except asyncio.TimeoutError as err:
+                if not termination_requested and in_progress:
+                    ok, msg = self._rpc_manager.close_request(req.rpc_uuid, req.username, terminate=True)
+                    require(ok)
+                    req.set_terminate_requested()
+                    timeout = TaskManager.TERMINATE_TIMEOUT
+                    termination_requested = True
+
+                else:
+                    req.set_failed()
+                    self._rpc_manager.notify_task_closed(req.rpc_uuid, req.username)  # TODO: ?
+                    self._event_logger.notify_task_closed(req.uuid)
+                    del self._close_requests[req.rpc_uuid]
+                    self.tear_down_request(rpc.uuid)
+                    break
+            finally:
+                self._event_logger.update_close_request(req)
+                self._log_close_requests_info()
 
     def run_in_external_ioloop(self, io_loop):
 

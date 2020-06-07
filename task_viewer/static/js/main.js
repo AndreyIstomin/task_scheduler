@@ -9,7 +9,7 @@ Object.freeze(EventType);
 const LogLevel = {"TRACE": 0, "DEBUG": 1, "INFO": 2, "WARN": 3, "ERROR": 4, "SUCCESS": 5};
 Object.freeze(LogLevel);
 
-const CMDType = {"OK": 0, "CLOSE_TASK": 1, "NOTIFY_TASK_CLOSED": 2, "LOAD_LOG": 3};
+const CMDType = {"OK": 0, "CLOSE_TASK": 1, "NOTIFY_TASK_CLOSED": 2, "LOAD_LOG": 3, "TERMINATE_TASK": 4};
 Object.freeze(CMDType);
 
 const TaskStatusToLogLevel = [2, 2, 2, 2, 4];

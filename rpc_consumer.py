@@ -82,7 +82,6 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._input = None
 
         self._task_is_opened = False
-        self._task_is_closed = False
         self._progress = 0.0
         self._failed = False
         self._message = ""
@@ -158,9 +157,9 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
     def _publish_response(self, response: ResponseObject):
 
         self._ch.basic_publish(exchange=self.EXCHANGE,
-                         routing_key=self._properties.reply_to,
-                         properties=pika.BasicProperties(correlation_id=self._properties.correlation_id),
-                         body=response.to_json())
+                                    routing_key=self._properties.reply_to,
+                                    properties=pika.BasicProperties(correlation_id=self._properties.correlation_id),
+                                    body=response.to_json())
 
     def _publish_completed(self):
 
@@ -186,15 +185,8 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self.publish_message('task is opened')
             self._task_is_opened = True
 
-    def _notify_task_closed(self):
-
-        if not self._task_is_closed:
-            self._ch.basic_ack(delivery_tag=self._method.delivery_tag)
-            self._task_is_closed = True
-
     def _reset_state(self):
         self._task_is_opened = False
-        self._task_is_closed = False
         self._progress = 0.0
         self._failed = False
         self._message = ""
@@ -202,7 +194,6 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
         self._err_message = None
 
     def _callback(self, ch, method, properties, body):
-
         try:
 
             #  First of all update vars
@@ -210,6 +201,7 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
             self._method = method
             self._properties = properties
             self._reset_state()
+            self._ch.basic_ack(delivery_tag=self._method.delivery_tag)
 
             if not self._cmd_handler.try_open_task(self._properties.correlation_id):
                 user = 'undefined'  # TODO
@@ -256,7 +248,6 @@ class RPCConsumer(RPCBase, RPCConsumerInterface):
                 self._publish_completed()
             else:
                 self._publish_error()
-            self._notify_task_closed()
             self._cmd_handler.notify_task_closed()
 
     def _check_close_requested(self):

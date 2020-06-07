@@ -134,6 +134,10 @@ class TestConsumerD(TestRPCConsumer, step_time_ms=2, raise_on_close_req=True):
 
     __step_ms = 2
 
+    @classmethod
+    def heartbit_timeout(cls):
+        return 10
+
     def _run_task(self):
 
         self.publish_progress(0.0, f"Starting the {self.instance_id()}th test RPC consumer")
@@ -143,10 +147,33 @@ class TestConsumerD(TestRPCConsumer, step_time_ms=2, raise_on_close_req=True):
             time.sleep(self.__step_ms * 0.001)
 
             if step == 100:
-                time.sleep(20)
+                time.sleep(200)
 
             if (step + 1) % (step_count / 10) == 0:
                 pr = (step + 1)/float(step_count)
                 self.publish_progress(pr, f"Current progress {int(pr * 100.0)}%")
 
         self.notify_task_completed(f"The {self.instance_id()}th {self.get_routing_key()} completed the task")
+
+
+@RPCRegistry.is_consumer('crash')
+class TestConsumerE(TestRPCConsumer):
+
+    @classmethod
+    def heartbit_timeout(cls):
+        return 3600
+
+    def _callback(self, ch, method, properties, body):
+        #  First of all update vars
+        self._ch = ch
+        self._method = method
+        self._properties = properties
+        self._reset_state()
+        self._ch.basic_ack(delivery_tag=self._method.delivery_tag)
+
+        if not self._cmd_handler.try_open_task(self._properties.correlation_id):
+            user = 'undefined'  # TODO
+            self.notify_task_failed(f'Task has been cancelled by user {user}')
+            return
+
+        raise RuntimeError('CRASH!!!')

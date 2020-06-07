@@ -154,6 +154,8 @@ class TaskManagerInterface(ABC):
     Max wait time for scenario step to start, seconds
     """
     START_TIMEOUT = 3600
+    CLOSE_TIMEOUT = 5
+    TERMINATE_TIMEOUT = 5
 
     class ExecutionError(Exception):
         pass

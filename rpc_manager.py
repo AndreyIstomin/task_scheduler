@@ -4,6 +4,7 @@ import uuid
 import json
 import jsonschema
 import pika
+from typing import *
 from multiprocessing import Process
 from PluginEngine import Log
 from PluginEngine.common import empty_uuid
@@ -22,11 +23,20 @@ class RPCConsumerData:
         self.instance_count = instance_count
 
 
+class ProcessContainer:
+
+    def __init__(self, process: Process, routing_key: str, instance_id: int):
+        self.process = process
+        self.routing_key = routing_key
+        self.instance_id = instance_id
+
+
 class RPCManager(RPCRegistry):
 
     SERVER = 0
     CLIENT = 1
     STOP_WAIT_SEC = 10
+    PROCESS_RESTART_DELAY = 1
 
     class Request:
 
@@ -48,16 +58,17 @@ class RPCManager(RPCRegistry):
         self._amqp_url = amqp_url
 
         # Client variables
-        self._requests = {}
+        self._requests: Dict[uuid.UUID, RPCManager.Request] = {}
         self._ext_reply_callback = reply_callback
         self._ext_error_callback = error_callback
         self._publisher = None
 
         # Server variables
-        self._consumers = []
-        self._processes = []
+        self._consumers: List[RPCConsumerData] = []
+        self._processes: List[ProcessContainer] = []
         self._cmd_consumer = None
         self._cmd_manager = None
+        self._closing = False
 
     #  Server interface
     def add_consumer(self, routing_key: str, instance_count: int):
@@ -84,7 +95,7 @@ class RPCManager(RPCRegistry):
 
         return RPCData(request_id, routing_key, 0.0, RPCStatus.WAITING, 'The request has been sent')
 
-    def close_request(self, request_id: uuid.UUID, username: str) -> (bool, str):
+    def close_request(self, request_id: uuid.UUID, username: str, terminate: bool = False) -> (bool, str):
         require(self._regime == RPCManager.CLIENT)
         require(self._publisher)
         require(self._publisher.running())
@@ -97,10 +108,8 @@ class RPCManager(RPCRegistry):
             self._publisher.publish_message(
                 exchange=self.CMD_EXCHANGE, routing_key=RPCBase.CMD_ROUTING_KEY,
                 corr_id=request_id,
-                payload=json.dumps(RPCManagerCMD(CMDType.CLOSE_TASK, str(request_id), username).to_json()))
-            # del self._requests[request_id]
-
-            # HERE WE ARE
+                payload=json.dumps(RPCManagerCMD(CMDType.CLOSE_TASK if not terminate else CMDType.TERMINATE_TASK,
+                                                 str(request_id), username).to_json()))
             return True, 'Ok'
 
         else:
@@ -126,13 +135,26 @@ class RPCManager(RPCRegistry):
     def run_async(self, io_loop) -> (bool, str):
         self._io_loop = io_loop
         if self._regime == RPCManager.SERVER:
-            return self._run_server_async()
+            return self._run_server_async(io_loop)
         else:
             return self._run_client()
 
     def run(self) -> (bool, str):
         require(self._regime == RPCManager.SERVER)
         return self._run_server()
+
+    def terminate_process(self, process_id: int):
+        require(self._regime == RPCManager.SERVER)
+        self._processes[process_id].process.terminate()
+        Log.warn(f'Process {process_id} has been terminated')
+
+    def publish_reply(self, response: ResponseObject):
+        require(self._regime == RPCManager.SERVER)
+        require(isinstance(response, ResponseObject))
+        self._cmd_consumer.channel().basic_publish(
+            exchange=RPCBase.EXCHANGE,
+            routing_key=SchedulerAsyncPublisher.REPLY_ROUTING_KEY,
+            body=response.to_json())
 
     # protected methods
     @staticmethod
@@ -144,25 +166,25 @@ class RPCManager(RPCRegistry):
     def _stop_server(self):
 
         # self.shutdown_event.set()
-
+        self._closing = True
         end_time = time.time() + self.STOP_WAIT_SEC
         num_terminated = 0
         num_failed = 0
 
         # -- Wait up to STOP_WAIT_SECS for all processes to complete
-        for proc in self._processes:
+        for item in self._processes:
             join_secs = max(0.0, min(end_time - time.time(), self.STOP_WAIT_SEC))
-            proc.join(join_secs)
+            item.process.join(join_secs)
 
         # -- Clear the procs list and _terminate_ any procs that
         # have not yet exited
         while self._processes:
-            proc = self._processes.pop()
-            if proc.is_alive():
-                proc.terminate()
+            item = self._processes.pop()
+            if item.process.is_alive():
+                item.process.terminate()
                 num_terminated += 1
             else:
-                exitcode = proc.exitcode
+                exitcode = item.process.exitcode
                 if exitcode:
                     num_failed += 1
 
@@ -170,24 +192,38 @@ class RPCManager(RPCRegistry):
 
         return num_failed, num_terminated
 
+    def _create_process(self, routing_key: str, proc_id: int, instance_id: int):
+
+        return ProcessContainer(
+            process=Process(target=RPCManager._run_consumer,
+                            args=(self._known_consumers[routing_key],
+                                  RPCConsumerInput(
+                                      self._amqp_url,
+                                      instance_id,
+                                      self._cmd_manager.create_cmd_handler(process_id=proc_id)))),
+            routing_key=routing_key,
+            instance_id=instance_id
+        )
+
+    def _restart_process(self, proc_id: int):
+        item = self._processes[proc_id]
+        require(not item.process.is_alive())
+        self._cmd_manager.notify_process_is_broken(proc_id)
+        self._processes[proc_id] = self._create_process(item.routing_key, proc_id, item.instance_id)
+        self._processes[proc_id].process.start()
+        Log.warn(f'Process: {item.routing_key}, instance {item.instance_id} has been restarted')
+
     def _run_server(self) -> (bool, str):
 
         require(self._regime == RPCManager.SERVER)
-        self._cmd_manager = CMDManager()
+        self._cmd_manager = CMDManager(self)
         #  Here we implement the most easiest solution - blocking consuming
         self._processes = []
         for consumer_data in self._consumers:
             for instance_id in range(consumer_data.instance_count):
-
-                process = Process(
-                    target=RPCManager._run_consumer,
-                    args=(self._known_consumers[consumer_data.routing_key],
-                          RPCConsumerInput(
-                              self._amqp_url, instance_id,
-                              self._cmd_manager.create_cmd_handler(process_id=len(self._processes)))))
-
-                self._processes.append(process)
-                process.start()
+                self._processes.append(
+                    self._create_process(consumer_data.routing_key, len(self._processes), instance_id))
+                self._processes[-1].process.start()
 
         #  Starting command queue(async)
         self._cmd_consumer = SchedulerAsyncConsumer(self._amqp_url, self._on_cmd_message)
@@ -201,6 +237,7 @@ class RPCManager(RPCRegistry):
         loop = asyncio.get_event_loop()
         self._cmd_consumer.run_in_loop(loop)
         self._cmd_manager.run_in_loop(loop)
+        asyncio.get_event_loop().create_task(self._keep_processes_running())
 
         try:
             loop.run_forever()
@@ -235,7 +272,16 @@ class RPCManager(RPCRegistry):
 
         return True, 'Ok'
 
-    def _on_cmd_message(self, body):
+    async def _keep_processes_running(self):
+
+        while not self._closing:
+            for proc_id, item in enumerate(self._processes):
+                if not item.process.is_alive():
+                    self._restart_process(proc_id)
+
+            await asyncio.sleep(RPCManager.PROCESS_RESTART_DELAY)
+
+    def _on_cmd_message(self, body, correlation_id):
         try:
             cmd = RPCManagerCMD.from_json(json.loads(body))
         except json.JSONDecodeError as err:
@@ -246,11 +292,18 @@ class RPCManager(RPCRegistry):
             return
 
         if cmd.type == CMDType.CLOSE_TASK:
+            Log.trace('RPC server got close task command')
             self._cmd_manager.close_request(cmd.request_id)
 
         elif cmd.type == CMDType.NOTIFY_TASK_CLOSED:
-            Log.trace('RPC Server got task close notification')
+            Log.trace('RPC server got task close notification')
             self._cmd_manager.cancel_close_request(cmd.request_id)
+
+        elif cmd.type == CMDType.TERMINATE_TASK:
+            Log.trace('RPC server got task termination command')
+            self._cmd_manager.terminate_request(cmd.request_id)
+        else:
+            Log.warn(f'RPC server got unknown command: {cmd.type}')
 
     def _run_server_async(self, io_loop) -> (bool, str):
 
@@ -264,7 +317,13 @@ class RPCManager(RPCRegistry):
 
         return True, 'Ok'
 
-    def _reply_callback(self, payload: bytes):
+    def _try_close_request(self, correlation_id):
+        try:
+            self.close_request(uuid.UUID(correlation_id), 'task_scheduler', terminate=True)
+        except Exception as err:
+            Log.warn(f'Failed to close invalid request: {err}')
+
+    def _reply_callback(self, payload: bytes, correlation_id: str):
         #  For test purposes
         # Log.info('Feedback callback: ' + str(payload))
 
@@ -274,24 +333,17 @@ class RPCManager(RPCRegistry):
             #  TODO: process the exception
             Log.error(f"Invalid JSON of the response: {err}")
             self._ext_error_callback.on_response_json_decode_error(err)
+            self._try_close_request(correlation_id)
             return
         except jsonschema.ValidationError as err:
             Log.error(f"Incorrect JSON format of the response: {err}")
             self._ext_error_callback.on_response_validation_error(err)
+            self._try_close_request(correlation_id)
             return
 
         if response.request_id not in self._requests:
-            Log.error(f"unknown RPC request {response.request_id}")
+            Log.error(f"Unknown RPC request {response.request_id}")
             self._ext_error_callback.on_unknown_request_id()
-
-        if response.status is ResponseStatus.IN_PROGRESS:
-            pass
-
-        elif response.status is ResponseStatus.COMPLETED:
-            pass
-
-        elif response.status is ResponseStatus.FAILED:
-            pass
 
         self._ext_reply_callback(response)
 

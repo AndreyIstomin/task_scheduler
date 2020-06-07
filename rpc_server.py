@@ -6,6 +6,7 @@ from backend.task_scheduler_service import RPCManager
 # logging.getLogger('async_consumer').disabled = True
 # logging.getLogger('async_publisher').disabled = True
 logging.disable(level=logging.INFO)
+LOGGER = logging.getLogger('RPC server')
 
 
 def parse_input() -> dict:
@@ -31,18 +32,20 @@ def parse_input() -> dict:
     return result
 
 
-def test_rpc_server():
+def run_server():
 
     consumers = parse_input()
     manager = RPCManager(regime=RPCManager.SERVER, amqp_url=SERVICE_CONFIG['task_scheduler_service']['amqp_url'])
     for name, count in consumers.items():
         manager.add_consumer(name, count)
+
+    LOGGER.warning('Server is ready')
     manager.run()
 
 
 if __name__ == '__main__':
 
-    test_rpc_server()
+    run_server()
 
 
 

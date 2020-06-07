@@ -11,20 +11,21 @@ import time
 import json
 import jsonschema
 import asyncio
+from typing import *
 from enum import Enum
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection, wait
 from PluginEngine import Log
 from PluginEngine.common import empty_uuid
 from PluginEngine.asserts import require
-from backend.task_scheduler_service.common import ResponseObject, shorten_uuid
+from backend.task_scheduler_service.common import ResponseObject, ResponseStatus, shorten_uuid
 from backend.task_scheduler_service.schemas import CMD_MESSAGE_SCHEMA
 from backend.task_scheduler_service.scenario_common import Scenario, ExecutableNode, Run
 
 
 class CMDTypeEnum:
 
-    OK, CLOSE_TASK, NOTIFY_TASK_CLOSED, LOAD_LOG = __list = range(4)
+    OK, CLOSE_TASK, NOTIFY_TASK_CLOSED, LOAD_LOG, TERMINATE_TASK = __list = range(5)
 
     def __iter__(self):
         return self.__list.__iter__()
@@ -171,8 +172,8 @@ class CMDManager:
         def __str__(self):
             return f'uuid: {shorten_uuid(self.task_uuid)}, close requested: {self.close_requested}'
 
-    def __init__(self):
-
+    def __init__(self, rpc_server: 'RPCManager'):
+        self._rpc_server = rpc_server
         self._processes = {}
         self._tasks_id_to_process_id = {}
         self._close_requests = set()
@@ -181,7 +182,6 @@ class CMDManager:
         require(isinstance(task_uuid, uuid.UUID))
 
         # TODO: check 
-
         # The task has not been sent to consumer yet
         if task_uuid not in self._tasks_id_to_process_id:
             self._close_requests.add(task_uuid)
@@ -192,7 +192,17 @@ class CMDManager:
             if not process.close_requested:
                 process.close_requested = True
                 process.conn.send([CMDType.CLOSE_TASK, str(task_uuid)])
+        self._log_close_info()
 
+    def terminate_request(self, req_uuid: uuid.UUID):
+        require(isinstance(req_uuid, uuid.UUID))
+        if req_uuid in self._tasks_id_to_process_id:
+            proc_id = self._tasks_id_to_process_id[req_uuid]
+            self._rpc_server.terminate_process(proc_id)
+            self._unregister_task(proc_id)
+            self._remove_cmd_handler(proc_id)
+            self._rpc_server.publish_reply(
+                ResponseObject(str(req_uuid), ResponseStatus.FAILED, 1.0, 'Process has been terminated'))
         self._log_close_info()
 
     def create_cmd_handler(self, process_id: int):
@@ -205,12 +215,30 @@ class CMDManager:
 
         return CMDHandler(child_conn)
 
-    def remove_cmd_handler(self, process_id: int):
+    def notify_process_is_broken(self, process_id: int):
+        if process_id in self._processes:
+            for req_uuid, proc_id in self._tasks_id_to_process_id.items():
+                if proc_id == process_id:
+                    self._rpc_server.publish_reply(
+                        ResponseObject(str(req_uuid), ResponseStatus.FAILED, 1.0, 'Process is dead'))
+                    break
+            self._unregister_task(process_id)
+            self._remove_cmd_handler(process_id)
 
+    def cancel_close_request(self, task_uuid: uuid.UUID):
+        self._close_requests.discard(task_uuid)
+        self._log_close_info()
+
+    def run_in_loop(self, io_loop: asyncio.AbstractEventLoop):
+        io_loop.create_task(self._poll_coro())
+
+    # protected
+    def _remove_cmd_handler(self, process_id: int):
+        require(process_id in self._processes)
         self._processes[process_id].conn.close()
         del self._processes[process_id]
 
-    async def poll_coro(self):
+    async def _poll_coro(self):
 
         while True:
 
@@ -220,21 +248,14 @@ class CMDManager:
             # Log.info(f'sleep time: {int(sleep_time * 1000.0)} ms')
             await asyncio.sleep(max(0.0, wake_up_at - asyncio.get_event_loop().time()))
 
-    def run_in_loop(self, io_loop: asyncio.AbstractEventLoop):
-
-        io_loop.create_task(self.poll_coro())
-
-    def cancel_close_request(self, task_uuid: uuid.UUID):
-
-        self._close_requests.discard(task_uuid)
-
-        self._log_close_info()
-
-# protected
     def _poll_processes(self):
 
         for conn in wait([item.conn for item in self._processes.values()], timeout=CMD_WAIT_TIMEOUT_SEC):
-            self._poll(conn)
+            try:
+                self._poll(conn)
+            except EOFError as err:
+                # self._remove_cmd_handler(conn.process_id)  # TODO: ?
+                Log.warn(f'Process {conn.process_id} connection is broken: {err}')
 
     def _poll(self, conn: Connection):
 
@@ -272,9 +293,12 @@ class CMDManager:
             len(self._tasks_id_to_process_id) == sum(1 for _ in self._processes.values() if _.task_uuid != empty_uuid))
 
     def _unregister_task(self, process_id: int):
-
+        require(process_id in self._processes)
         process = self._processes[process_id]
-        del self._tasks_id_to_process_id[process.task_uuid]
+
+        if process.task_uuid in self._tasks_id_to_process_id:
+            del self._tasks_id_to_process_id[process.task_uuid]
+
         self._close_requests.discard(process.task_uuid)
         process.reset_task()
         self._log_close_info()

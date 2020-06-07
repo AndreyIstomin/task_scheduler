@@ -3,6 +3,7 @@ import jsonschema
 import uuid
 import jinja2
 import aiohttp_jinja2
+import logging
 from aiohttp import web
 from functools import partial
 from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
@@ -11,11 +12,11 @@ from backend.generator_service import create_db_handler
 from backend.task_scheduler_service import ScenarioProvider, TaskManager, TaskLogger, EditLockManager
 from backend.task_scheduler_service.schemas import RUN_TASK_SCHEMA
 from backend.task_scheduler_service.routes import routes
+logging.disable(logging.INFO)
 
 
 task_manager = None
 the_app = None
-
 
 async def run_task(request):
     try:

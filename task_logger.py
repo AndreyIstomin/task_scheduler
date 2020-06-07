@@ -10,9 +10,8 @@ from datetime import datetime
 from time import time
 from collections import deque
 from PluginEngine import Log, LogLevel
-from PluginEngine.common import empty_uuid
 from backend.config import SERVICE_CONFIG
-from backend.task_scheduler_service import TaskData, RPCData, RPCStatus, CloseRequest, shorten_uuid
+from backend.task_scheduler_service import TaskData, RPCData, CloseRequest, shorten_uuid
 
 
 db = SqliteDatabase(SERVICE_CONFIG['task_scheduler_service']['log_db'])

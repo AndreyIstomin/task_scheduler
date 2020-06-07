@@ -274,23 +274,23 @@ class TaskData:
 
 class CloseRequest:
 
-    def __init__(self, task_uuid: uuid.UUID, task_name: str, username: str):
+    def __init__(self, task_uuid: uuid.UUID, rpc_uuid: uuid.UUID, task_name: str, username: str, queue: asyncio.Queue):
         self.uuid = uuid.uuid4()
-        self.time = time.time()
         self.task_name = task_name
         self.task_uuid = task_uuid
+        self.rpc_uuid = rpc_uuid
         self.progress = 0.0
         self.message = 'waiting'
         self.status = RPCStatus.WAITING
         self.username = username
+        self.queue = queue
 
         self.__mock_rpc_uuid = uuid.uuid4()
 
     def set_in_progress(self):
-        require(self.status == RPCStatus.WAITING)
+        require(self.status != RPCStatus.COMPLETED and self.status != RPCStatus.FAILED)
         self.status = RPCStatus.IN_PROGRESS
         self.message = 'in progress'
-        self.time = time.time()
 
     def in_progress(self):
         return self.status == RPCStatus.IN_PROGRESS
@@ -299,6 +299,15 @@ class CloseRequest:
         self.status = RPCStatus.COMPLETED
         self.message = 'completed'
         self.progress = 1.0
+
+    def set_failed(self):
+        self.status = RPCStatus.FAILED
+        self.message = 'failed'
+        self.progress = 1.0
+
+    def set_terminate_requested(self):
+        self.status = RPCStatus.IN_PROGRESS
+        self.message = 'terminating'
 
     def mock_rpc(self) -> RPCData:
         return RPCData(self.__mock_rpc_uuid, 'Close request', self.progress, self.status, self.message)
