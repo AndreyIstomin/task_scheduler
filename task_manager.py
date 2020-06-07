@@ -217,7 +217,7 @@ class TaskManager(TaskManagerInterface):
 
         self._event_logger.update_close_request(req)
 
-        asyncio.get_running_loop().create_task(self._run_close_request(req, rpc))
+        asyncio.get_event_loop().create_task(self._run_close_request(req, rpc))
 
         self._log_close_requests_info()
         return ok, msg
