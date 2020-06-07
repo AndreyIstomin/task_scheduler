@@ -23,8 +23,7 @@ set TASK_SCHEDULER_START_TIMEOUT=3600
 set TASK_SCHEDULER_CLOSE_TIMEOUT=10
 set TASK_SCHEDULER_TERMINATE_TIMEOUT=10
 
-REM start "Task scheduler" cmd /c "pipenv run python ..\app.py"
-REM start "RPC server 1" cmd /c "pipenv run python ..\rpc_server.py -c timeout_error 1 crash 1 invalid_response 1"
-REM start "RPC server 2" cmd /c "pipenv run python ..\rpc_server.py -c timeout_error 1 crash 1"
-REM start "API launcher" cmd /c "pipenv run python ..\api_launcher.py http://127.0.0.1:8181 user1"
-start "API launcher" cmd /c "pipenv run python ..\api_launcher.py http://geoserver:8181 user1"
+start "Task scheduler" cmd /c "pipenv run python ..\app.py"
+start "RPC server 1" cmd /c "pipenv run python ..\rpc_server.py -c timeout_error 1 crash 1 invalid_response 1"
+start "RPC server 2" cmd /c "pipenv run python ..\rpc_server.py -c timeout_error 1 crash 1"
+tart "API launcher" cmd /c "pipenv run python ..\api_launcher.py http://127.0.0.1:8181 user1"

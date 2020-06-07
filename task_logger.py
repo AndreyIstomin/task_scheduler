@@ -168,8 +168,7 @@ class TaskLogger:
 
     async def load_log(self, ws: web.WebSocketResponse, num_rows: int, less_than: Union[int, None] = None):
         """
-	Sends event log from the DB to the client 
-
+        Sends event log from the DB to the client
         :param ws: websocket to send data
         :param num_rows: maximum number of rows to be loaded
         :param less_than: the maximum id of the loaded rows must be less than the given arg
@@ -187,8 +186,8 @@ class TaskLogger:
 
     def message(self, msg: str, log_level: int):
         self._events.append(EventDescriptor(datetime.now(), message_descriptor(msg, log_level), completed=True))
-        self._try_save_log()
         self._send(self._events[-1].to_str())
+        self._try_save_log()
 
     def notify_task_closed(self, task_uuid: uuid.UUID):
 

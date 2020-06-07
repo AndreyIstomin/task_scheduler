@@ -174,6 +174,7 @@ class TestConsumerE(TestRPCConsumer):
         if not self._cmd_handler.try_open_task(self._properties.correlation_id):
             user = 'undefined'  # TODO
             self.notify_task_failed(f'Task has been cancelled by user {user}')
-            return
+            self._publish_error()
+            self._cmd_handler.notify_task_closed()
 
         raise RuntimeError('CRASH!!!')
