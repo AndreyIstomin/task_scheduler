@@ -1,0 +1,33 @@
+<?xml version="1.1" encoding="UTF-8" ?>
+<config>
+	<scenario name="timeout_test" uuid="a49cb278-34a2-45ec-b409-84c1cbd5c3e9">
+		<consequent>
+			<run>timeout_error</run>
+		</consequent>
+	</scenario>
+	<scenario name="concurrent_timeout_test" uuid="27d787c0-8605-42cd-bc7a-a0cf53c475e2">
+		<concurrent>
+			<run>timeout_error</run>
+			<run>timeout_error</run>
+		</concurrent>
+	</scenario>
+	<scenario name="concurrent_crash_test" uuid="718573d6-52e2-4ad1-914a-9511d8a7de24">
+		<concurrent>
+			<run>crash</run>
+			<run>crash</run>
+		</concurrent>
+	</scenario>
+
+	<scenario name="bad_test_scenario" uuid="c2163012-eb9b-4ed9-badf-f0e9304d2e3f">
+		<concurrent>
+			<run>crash</run>
+			<run>timeout_error</run>
+		</concurrent>
+	</scenario>
+
+	<scenario name="invalid_response" uuid="c32d698a-9563-40ce-95cf-c4b3508b7d96">
+		<consequent>
+			<run>invalid_response</run>
+		</consequent>
+	</scenario>
+</config>
