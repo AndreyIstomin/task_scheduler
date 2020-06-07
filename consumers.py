@@ -136,7 +136,7 @@ class TestConsumerD(TestRPCConsumer, step_time_ms=2, raise_on_close_req=True):
 
     @classmethod
     def heartbit_timeout(cls):
-        return 10
+        return 5
 
     def _run_task(self):
 

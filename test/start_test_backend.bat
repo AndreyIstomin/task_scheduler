@@ -20,8 +20,8 @@ set ELEVATION_PATH=\\gs\world\v21data3\height
 set LOG_DB=D:\tmp\event_log.db
 set LANDSCAPE_EDITOR_LOG_LEVEL=2
 set TASK_SCHEDULER_START_TIMEOUT=3600
-set TASK_SCHEDULER_CLOSE_TIMEOUT=1
-set TASK_SCHEDULER_TERMINATE_TIMEOUT=60
+set TASK_SCHEDULER_CLOSE_TIMEOUT=10
+set TASK_SCHEDULER_TERMINATE_TIMEOUT=10
 
 start "Task scheduler" cmd /c "pipenv run python ..\app.py"
 start "RPC server 1" cmd /c "pipenv run python ..\rpc_server.py -c timeout_error 1 crash 1 invalid_response 1"

@@ -104,9 +104,7 @@ class TaskManager(TaskManagerInterface):
 
             except asyncio.TimeoutError as err:
                 # The place for request's thread termination
-                rpc.set_failed()
                 rpc.message = f'heartbit timeout {timeout} seconds has been reached'
-                task_data.set_failed(msg=rpc.message)
                 self.request_stop_task(task_uuid, task_input.username())
                 continue
 
@@ -235,11 +233,9 @@ class TaskManager(TaskManagerInterface):
 
             req.queue.put_nowait(RPCStatus.COMPLETED)
 
-
         elif rpc.status == RPCStatus.IN_PROGRESS:
 
             req.queue.put_nowait(RPCStatus.IN_PROGRESS)
-
 
     def is_close_requested(self, rpc: RPCData):
         return rpc.uuid in self._close_requests
