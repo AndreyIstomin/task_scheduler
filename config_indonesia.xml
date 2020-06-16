@@ -1,0 +1,70 @@
+<?xml version="1.1" encoding="UTF-8" ?>
+<config>
+<!--	Infrastructure line-->
+<!--	Road-->
+    <scenario name="generate_road" uuid="c51d743b-507f-4bee-ab3e-73d318c458e1" notify="generate_road">
+		<consequent lock_cells="infrastructure_line:road">
+			<run>road_generator</run>
+		</consequent>
+	</scenario>
+	<scenario name="road_indonesia_import" uuid="55ad8343-79aa-40fc-a5f3-34a479ccfef4">
+		<input type="rect"/>
+		<consequent>
+			<consequent>
+				<run>road_indonesia_import</run>
+			</consequent>
+			<consequent lock_cells="infrastructure_line:road">
+				<run>road_generator</run>
+			</consequent>
+		</consequent>
+	</scenario>
+<!--	Powerline-->
+	<scenario name="generate_powerline" uuid="c319c504-02c9-4816-a0d3-ecf4f26213cf" notify="generate_power_line">
+		<consequent lock_cells="infrastructure_line:powerline">
+			<run>powerline_generator</run>
+		</consequent>
+	</scenario>
+	<scenario name="powerline_indonesia_import" uuid="140aa6ae-5b4c-425f-8551-10feff31ffed">
+		<input type="rect"/>
+		<consequent>
+			<consequent>
+				<run>powerline_indonesia_import</run>
+			</consequent>
+			<consequent lock_cells="infrastructure_line:powerline">
+				<run>powerline_generator</run>
+			</consequent>
+		</consequent>
+	</scenario>
+<!--	Bridge-->
+	<scenario name="generate_bridge" uuid="f6159ab9-b238-4aa6-9105-1bca5f92c373" notify="generate_bridge">
+		<consequent lock_cells="infrastructure_line:bridge">
+			<run>bridge_generator</run>
+		</consequent>
+	</scenario>
+	<scenario name="bridge_indonesia_import" uuid="3d7935da-82ef-484a-87b8-c0e318042070">
+		<input type="rect"/>
+		<consequent>
+			<consequent>
+				<run>bridge_indonesia_import</run>
+			</consequent>
+			<consequent lock_cells="infrastructure_line:bridge">
+				<run>bridge_generator</run>
+			</consequent>
+		</consequent>
+	</scenario>
+	<scenario name="il_import" uuid="7b0b273f-fdf7-4ec4-a0c2-26f2fd0498fd">
+		<input type="rect"/>
+		<consequent>
+			<concurrent>
+				<run>road_indonesia_import</run>
+				<run>powerline_indonesia_import</run>
+				<run>bridge_indonesia_import</run>
+			</concurrent>
+			<concurrent lock_cells="infrastructure_line:road,fence,bridge">
+				<run>road_generator</run>
+				<run>powerline_generator</run>
+				<run>bridge_generator</run>
+			</concurrent>
+		</consequent>
+	</scenario>
+</config>

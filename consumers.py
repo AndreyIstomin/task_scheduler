@@ -9,7 +9,8 @@ from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
 from LandscapeEditor.road.common import IL_SUBTYPE
 from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
 from LandscapeEditor.road import RoadGenerator, RoadOSMImportGenerator, FenceGenerator, FenceOSMImportGenerator, \
-    PowerlineGenerator, PowerlineOSMImportGenerator, BridgeGenerator, BridgeOSMImportGenerator
+    PowerlineGenerator, PowerlineOSMImportGenerator, BridgeGenerator, BridgeOSMImportGenerator, \
+    RoadIndonesiaImportGenerator, PowerlineIndonesiaImportGenerator, BridgeIndonesiaImportGenerator
 from backend.task_scheduler_service import RPCRegistry, GeneratorAdapter, ResponseObject, RPCConsumer
 
 __all__ = ['RPCRoadGenerator', 'RPCRoadOSMImport',
@@ -21,6 +22,13 @@ __all__ = ['RPCRoadGenerator', 'RPCRoadOSMImport',
 @RPCRegistry.is_consumer('road_osm_import')
 class RPCRoadOSMImport(GeneratorAdapter, generator_class=RoadOSMImportGenerator, raise_on_close_request=True,
                        heartbit_timeout=3600):
+    pass
+
+
+@RPCRegistry.is_consumer('road_indonesia_import')
+class RPCRoadIndonesiaImport(GeneratorAdapter, generator_class=RoadIndonesiaImportGenerator,
+                             raise_on_close_request=True,
+                             heartbit_timeout=3600):
     pass
 
 
@@ -48,6 +56,13 @@ class RPCPowerlineOSMImport(GeneratorAdapter, generator_class=PowerlineOSMImport
     pass
 
 
+@RPCRegistry.is_consumer('powerline_indonesia_import')
+class RPCPowerlineIndonesiaImport(GeneratorAdapter, generator_class=PowerlineIndonesiaImportGenerator,
+                                  raise_on_close_request=True,
+                                  heartbit_timeout=3600):
+    pass
+
+
 @RPCRegistry.is_consumer('powerline_generator')
 class RPCPowerlineGenerator(GeneratorAdapter, generator_class=PowerlineGenerator, raise_on_close_request=True,
                             heartbit_timeout=600):
@@ -57,6 +72,13 @@ class RPCPowerlineGenerator(GeneratorAdapter, generator_class=PowerlineGenerator
 @RPCRegistry.is_consumer('bridge_osm_import')
 class RPCBridgeOSMImport(GeneratorAdapter, generator_class=BridgeOSMImportGenerator, raise_on_close_request=True,
                          heartbit_timeout=3600):
+    pass
+
+
+@RPCRegistry.is_consumer('bridge_indonesia_import')
+class RPCBridgeIndonesiaImport(GeneratorAdapter, generator_class=BridgeIndonesiaImportGenerator,
+                               raise_on_close_request=True,
+                               heartbit_timeout=3600):
     pass
 
 
