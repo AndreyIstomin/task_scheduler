@@ -8,7 +8,7 @@ from jsonschema import validate, ValidationError
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
 from LandscapeEditor.road.common import IL_SUBTYPE
 from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
-from LandscapeEditor.road import RoadGenerator, RoadOSMImportGenerator, FenceGenerator, FenceOSMImportGenerator, \
+from LandscapeEditor.road import RoadGenerator, RoadLightGenerator, RoadOSMImportGenerator, FenceGenerator, FenceOSMImportGenerator, \
     PowerlineGenerator, PowerlineOSMImportGenerator, BridgeGenerator, BridgeOSMImportGenerator, \
     RoadIndonesiaImportGenerator, PowerlineIndonesiaImportGenerator, BridgeIndonesiaImportGenerator
 from backend.task_scheduler_service import RPCRegistry, GeneratorAdapter, ResponseObject, RPCConsumer
@@ -35,6 +35,12 @@ class RPCRoadIndonesiaImport(GeneratorAdapter, generator_class=RoadIndonesiaImpo
 @RPCRegistry.is_consumer('road_generator')
 class RPCRoadGenerator(GeneratorAdapter, generator_class=RoadGenerator, raise_on_close_request=True,
                        heartbit_timeout=600):
+    pass
+
+
+@RPCRegistry.is_consumer('road_light_generator')
+class RPCRoadLightGenerator(GeneratorAdapter, generator_class=RoadLightGenerator, raise_on_close_request=True,
+                            heartbit_timeout=600):
     pass
 
 

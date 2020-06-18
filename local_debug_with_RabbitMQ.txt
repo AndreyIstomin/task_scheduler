@@ -1,0 +1,12 @@
+1) Установить локальный RabbitMQ и настроить, как написано тут: ..\backend\task_scheduler_service\README.txt
+2) Выключить DBListener на сервере (gs)
+3) Включить локальный RabbitMQ (консоль тут: http://127.0.0.1:15672)
+4) Настроить переменные среды для локального запуска backend как в ..\backend\task_scheduler_service\test\start_test_backend.bat в Вашем скрипте для запуска PyCharm
+5) Запустить исправленным скриптом PyCharm
+6) Запустить ..\backend\apps\local_db_listener_service.py
+7) Запустить ..\backend\apps\local_notification_service.py
+8) Запустить ..\backend\task_scheduler_service\app.py
+9) Запустить на Debug ..\backend\task_scheduler_service\rpc_server.py c параметрами, в которых надо указать те очереди, которые нужны для отладки. Например, для отладки road_generator: -c road_generator 1 road_osm_import 1
+10) Переключить QGIS плагины на работу с локальным backend: ArrangementEditor -> Settings -> Generator API -> IP установить на localhost
+11) Поставить нужные brakepoints в генераторе и запустить плагин 
+	

@@ -2,10 +2,11 @@
 <config>
 <!--	Infrastructure line-->
 <!--	Road-->
-    <scenario name="generate_road" uuid="c51d743b-507f-4bee-ab3e-73d318c458e1" notify="generate_road">
-		<consequent lock_cells="infrastructure_line:road">
+    <scenario name="generate_road" uuid="c51d743b-507f-4bee-ab3e-73d318c458e1" notify="generate_indonesia_road">
+		<concurrent lock_cells="infrastructure_line:road">
 			<run>road_generator</run>
-		</consequent>
+			<run>road_light_generator</run>
+		</concurrent>
 	</scenario>
 	<scenario name="road_indonesia_import" uuid="55ad8343-79aa-40fc-a5f3-34a479ccfef4">
 		<input type="rect"/>
@@ -13,13 +14,14 @@
 			<consequent>
 				<run>road_indonesia_import</run>
 			</consequent>
-			<consequent lock_cells="infrastructure_line:road">
+			<concurrent lock_cells="infrastructure_line:road">
 				<run>road_generator</run>
-			</consequent>
+				<run>road_light_generator</run>
+			</concurrent>
 		</consequent>
 	</scenario>
 <!--	Powerline-->
-	<scenario name="generate_powerline" uuid="c319c504-02c9-4816-a0d3-ecf4f26213cf" notify="generate_power_line">
+	<scenario name="generate_powerline" uuid="c319c504-02c9-4816-a0d3-ecf4f26213cf" notify="generate_indonesia_power_line">
 		<consequent lock_cells="infrastructure_line:powerline">
 			<run>powerline_generator</run>
 		</consequent>
@@ -36,7 +38,7 @@
 		</consequent>
 	</scenario>
 <!--	Bridge-->
-	<scenario name="generate_bridge" uuid="f6159ab9-b238-4aa6-9105-1bca5f92c373" notify="generate_bridge">
+	<scenario name="generate_bridge" uuid="f6159ab9-b238-4aa6-9105-1bca5f92c373" notify="generate_indonesia_bridge">
 		<consequent lock_cells="infrastructure_line:bridge">
 			<run>bridge_generator</run>
 		</consequent>
@@ -62,6 +64,7 @@
 			</concurrent>
 			<concurrent lock_cells="infrastructure_line:road,fence,bridge">
 				<run>road_generator</run>
+				<run>road_light_generator</run>
 				<run>powerline_generator</run>
 				<run>bridge_generator</run>
 			</concurrent>
