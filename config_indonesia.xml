@@ -62,7 +62,7 @@
 				<run>powerline_indonesia_import</run>
 				<run>bridge_indonesia_import</run>
 			</concurrent>
-			<concurrent lock_cells="infrastructure_line:road,powerline,bridge">
+			<concurrent lock_cells="infrastructure_line:road,bridge">
 				<consequent>
 					<run>road_generator</run>
 					<run>road_light_generator</run>
