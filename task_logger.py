@@ -10,7 +10,7 @@ from datetime import datetime
 from time import time
 from collections import deque
 from PluginEngine import Log, LogLevel
-from backend.config import SERVICE_CONFIG
+from LandscapeEditor.backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service import TaskData, RPCData, CloseRequest, shorten_uuid
 
 

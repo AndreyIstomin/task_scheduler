@@ -1,7 +1,6 @@
 import requests
 import sys
 import json
-import uuid
 from typing import *
 from copy import copy
 from jsonschema import validate, ValidationError
@@ -10,7 +9,7 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSettings
 from PluginEngine import quadtree
 from LandscapeEditor.backend.schemas import LON_LAT_RECT_PROPERTY, CELL_LIST_ARGS_PROPERTY
-from backend.config import SERVICE_CONFIG
+from LandscapeEditor.backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service import ScenarioProvider
 
 

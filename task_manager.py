@@ -4,11 +4,10 @@ from time import time
 from collections import namedtuple
 from PluginEngine import Log
 from PluginEngine.asserts import require
-from LandscapeEditor.backend import TaskInputInterface
+from LandscapeEditor.backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
     RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
 from backend.task_scheduler_service.common import TaskManagerInterface, EditLockManagerInterface
-from backend import SERVICE_CONFIG
 
 
 RequestData = namedtuple('RequestData', 'task_uuid, queue')

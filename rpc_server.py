@@ -1,6 +1,6 @@
 import logging
 import argparse
-from backend.config import SERVICE_CONFIG
+from LandscapeEditor.backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service import RPCManager
 
 # logging.getLogger('async_consumer').disabled = True

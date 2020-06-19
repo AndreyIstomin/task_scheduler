@@ -4,8 +4,7 @@ import xml.etree.ElementTree as ET
 from typing import *
 from copy import deepcopy
 from PluginEngine.asserts import require
-from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
-from backend.config import SERVICE_CONFIG
+from LandscapeEditor.backend.config import SERVICE_CONFIG
 from backend.task_scheduler_service.scenario_common import *
 from backend.task_scheduler_service.rpc_common import RPCRegistry
 
