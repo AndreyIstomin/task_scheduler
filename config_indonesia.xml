@@ -3,10 +3,10 @@
 <!--	Infrastructure line-->
 <!--	Road-->
     <scenario name="generate_road" uuid="c51d743b-507f-4bee-ab3e-73d318c458e1" notify="generate_indonesia_road">
-		<concurrent lock_cells="infrastructure_line:road">
+		<consequent lock_cells="infrastructure_line:road">
 			<run>road_generator</run>
 			<run>road_light_generator</run>
-		</concurrent>
+		</consequent>
 	</scenario>
 	<scenario name="road_indonesia_import" uuid="55ad8343-79aa-40fc-a5f3-34a479ccfef4">
 		<input type="rect"/>
@@ -14,10 +14,10 @@
 			<consequent>
 				<run>road_indonesia_import</run>
 			</consequent>
-			<concurrent lock_cells="infrastructure_line:road">
+			<consequent lock_cells="infrastructure_line:road">
 				<run>road_generator</run>
 				<run>road_light_generator</run>
-			</concurrent>
+			</consequent>
 		</consequent>
 	</scenario>
 <!--	Powerline-->
@@ -62,9 +62,11 @@
 				<run>powerline_indonesia_import</run>
 				<run>bridge_indonesia_import</run>
 			</concurrent>
-			<concurrent lock_cells="infrastructure_line:road,fence,bridge">
-				<run>road_generator</run>
-				<run>road_light_generator</run>
+			<concurrent lock_cells="infrastructure_line:road,powerline,bridge">
+				<consequent>
+					<run>road_generator</run>
+					<run>road_light_generator</run>
+				</consequent>
 				<run>powerline_generator</run>
 				<run>bridge_generator</run>
 			</concurrent>
