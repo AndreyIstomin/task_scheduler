@@ -10,10 +10,11 @@ from PluginEngine import Log
 from PluginEngine.common import empty_uuid
 from PluginEngine.asserts import require
 from LandscapeEditor.backend import TaskInputInterface
-from backend.task_scheduler_service import SchedulerAsyncPublisher, SchedulerAsyncConsumer, RPCConsumerInput
-from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
+from backend.task_scheduler_service.scheduler_async_publisher import SchedulerAsyncPublisher, SchedulerAsyncConsumer
+from backend.task_scheduler_service.common import ResponseObject
 from backend.task_scheduler_service.rpc_common import RPCBase, RPCRegistry, RPCData, RPCStatus, \
     RPCErrorCallbackInterface, RPCManagerCMD, CMDManager, CMDType
+from backend.task_scheduler_service.rpc_consumer import RPCConsumerInput
 
 
 class RPCConsumerData:

@@ -2,7 +2,6 @@ import uuid
 import json
 import jsonschema
 from typing import *
-from multiprocessing import Array
 from abc import ABC, abstractmethod
 from PluginEngine import Log, quadtree
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
@@ -11,7 +10,7 @@ from backend.task_scheduler_service.schemas import RESPONSE_SCHEMA
 
 
 __all__ = ["TypeList", "ObjectMap", "CellMap",
-           "ResponseStatus", "ResponseObject", "array_to_uuid", "uuid_to_array", "shorten_uuid",
+           "ResponseStatus", "ResponseObject", "shorten_uuid",
            "TaskManagerInterface", "LockedData", "EditLockManagerInterface", "TaskInterface"]
 
 TypeList = NewType('TypeList', List[Tuple[int, Union[List[int], None]]])
@@ -52,21 +51,6 @@ class ResponseObject:
         d = json.loads(json_data)
         jsonschema.validate(d, RESPONSE_SCHEMA)
         return cls(**d)
-
-
-def array_to_uuid(arr: Array):
-
-    with arr.get_lock():
-        return uuid.UUID(bytes=bytes(arr[:]))
-
-
-def uuid_to_array(arr: Array, _uuid: uuid.UUID):
-
-    with arr.get_lock():
-        arr[:] = _uuid.bytes
-
-    return arr
-
 
 def shorten_uuid(_uuid: Union[uuid.UUID, str]):
 

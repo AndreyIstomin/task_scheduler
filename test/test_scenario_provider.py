@@ -1,8 +1,10 @@
 import os
 import unittest
 from unittest.mock import MagicMock
-from backend.task_scheduler_service import ScenarioProvider
+from PluginEngine.common import empty_uuid
+from backend.task_scheduler_service.scenario_provider import ScenarioProvider
 from backend.task_scheduler_service.scenario_common import *
+from backend.task_scheduler_service.consumers import *
 
 
 class ScenarioProviderTestCase(unittest.TestCase):
@@ -12,22 +14,17 @@ class ScenarioProviderTestCase(unittest.TestCase):
         pr = ScenarioProvider()
 
         path = os.path.join(os.path.dirname(__file__), 'test_scenario_2.xml')
-        with open(path) as f:
-            xml_data = f.read()
-
-        pr.get_xml_data = MagicMock(return_value=xml_data)
-
-        scenario, msg = pr.get_scenario(task_id=0)
-
-        # print(f'msg: {msg}, result:\n{scenario}')
+        pr._get_scenario_path = MagicMock(return_value=path)
+        pr.load()
+        scenario, msg = pr.get_scenario(task_id=empty_uuid)
 
         expected = Scenario(name='test_scenario_2')
-        expected.input_type = ScenarioProvider.InputType.RECT
+        expected.set_input_type(ScenarioProvider.InputType.RECT)
         node_0 = Consequent()
         node_1 = Concurrent()
-        node_1.add_child(Run('road_import_osm'))
-        node_1.add_child(Run('powerline_import_osm'))
-        node_1.add_child(Run('fence_import_osm'))
+        node_1.add_child(Run('road_osm_import'))
+        node_1.add_child(Run('powerline_osm_import'))
+        node_1.add_child(Run('fence_osm_import'))
         node_2 = Concurrent(locker=CellLocker.from_str('infrastructure_line:road, powerline, fence;tree'))
         node_2.add_child(Run('road_generator'))
         node_2.add_child(Run('powerline_generator'))

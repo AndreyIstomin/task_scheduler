@@ -1,12 +1,8 @@
-# -*- coding: utf-8 -*-
-# pylint: disable=C0111,C0103,R0205
-
-import functools
 import logging
 import time
 import pika
-import json
-from backend.task_scheduler_service import ExampleConsumer, ResponseObject, ResponseStatus
+from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
+from backend.task_scheduler_service.asynchronous_consumer import ExampleConsumer
 
 LOG_FORMAT = ('%(levelname) -10s %(asctime)s %(name) -30s %(funcName) '
               '-35s %(lineno) -5d: %(message)s')

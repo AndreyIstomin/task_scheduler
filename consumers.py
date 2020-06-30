@@ -11,7 +11,8 @@ from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
 from LandscapeEditor.road import RoadGenerator, RoadLightGenerator, RoadOSMImportGenerator, FenceGenerator, FenceOSMImportGenerator, \
     PowerlineGenerator, PowerlineOSMImportGenerator, BridgeGenerator, BridgeOSMImportGenerator, \
     RoadIndonesiaImportGenerator, PowerlineIndonesiaImportGenerator, BridgeIndonesiaImportGenerator
-from backend.task_scheduler_service import RPCRegistry, GeneratorAdapter, ResponseObject, RPCConsumer
+from backend.task_scheduler_service.rpc_common import RPCRegistry, ResponseObject
+from backend.task_scheduler_service.rpc_consumer import RPCConsumer, GeneratorAdapter
 
 __all__ = ['RPCRoadGenerator', 'RPCRoadOSMImport',
            'RPCFenceGenerator', 'RPCFenceOSMImport',

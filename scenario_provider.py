@@ -1,4 +1,3 @@
-import os
 import uuid
 import xml.etree.ElementTree as ET
 from typing import *
@@ -20,12 +19,8 @@ class ScenarioProvider(ScenarioProviderBase):
         self._scenarios = {}
         self._loaded = False
 
-    def get_xml_data(self, task_id: int):
-        path = os.path.join(os.path.dirname(__file__), 'test/test_scenario_3.xml')
-        with open(path) as f:
-            xml_data = f.read()
-
-        return xml_data
+    def _get_scenario_path(self):
+        return SERVICE_CONFIG['task_scheduler_service']['scenario_db']
 
     def load(self):
 
@@ -35,7 +30,7 @@ class ScenarioProvider(ScenarioProviderBase):
         self._names = {}
         self._notify_bindings = {}
         self._scenarios = {}
-        path = SERVICE_CONFIG['task_scheduler_service']['scenario_db']
+        path = self._get_scenario_path()
         try:
             root = ET.parse(path).getroot()
         except ET.ParseError as err:
@@ -121,7 +116,7 @@ class ScenarioProvider(ScenarioProviderBase):
             if elem.attrib['type'] not in self.input_type_map:
                 raise self.ParseError(f'Unknown input type: {input_type}')
 
-            parent.input_type = self.input_type_map[input_type]
+            parent.set_input_type(self.input_type_map[input_type])
 
         elif elem.tag in ('concurrent', 'consequent'):
 

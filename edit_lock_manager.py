@@ -1,11 +1,10 @@
-import uuid
 from datetime import datetime
 from typing import *
 from PluginEngine import UseDatabase, Log, quadtree
 from PluginEngine.postgis import MINIMUM_BIGINT_VALUE
 from LandscapeEditor.backend import BackendDBHandler
 from backend.generator_service import create_db_handler
-from backend.task_scheduler_service.common import LockedData, EditLockManagerInterface, TypeList, CellMap, ObjectMap
+from backend.task_scheduler_service.common import LockedData, EditLockManagerInterface, TypeList
 
 
 class LockedCells(LockedData):

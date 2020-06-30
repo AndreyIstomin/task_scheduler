@@ -9,9 +9,13 @@ from functools import partial
 from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA
 from LandscapeEditor.backend.config import SERVICE_CONFIG
 from backend.generator_service import create_db_handler
-from backend.task_scheduler_service import ScenarioProvider, TaskManager, TaskLogger, EditLockManager
+from backend.task_scheduler_service.scenario_provider import ScenarioProvider
+from backend.task_scheduler_service.task_manager import TaskManager
+from backend.task_scheduler_service.task_logger import TaskLogger
+from backend.task_scheduler_service.edit_lock_manager import EditLockManager
 from backend.task_scheduler_service.schemas import RUN_TASK_SCHEMA
 from backend.task_scheduler_service.routes import routes
+from backend.task_scheduler_service.consumers import *
 logging.disable(logging.INFO)
 
 

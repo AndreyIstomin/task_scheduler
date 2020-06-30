@@ -1,16 +1,23 @@
 import json
-from backend.task_scheduler_service import ResponseStatus, ResponseObject
+import unittest
+from PluginEngine.common import empty_uuid
+from backend.task_scheduler_service.common import ResponseStatus, ResponseObject
 
 
-def test_response_object():
+class ResponseObjectTestCase(unittest.TestCase):
 
-    d = {'status': ResponseStatus.IN_PROGRESS, 'progress': 0.55, 'error_message': 'test'}
+    def test_response_object(self):
 
-    response = ResponseObject.from_json(json.dumps(d))
+        d = {'status': ResponseStatus.IN_PROGRESS,
+             'progress': 0.55,
+             'message': 'test',
+             'request_id': str(empty_uuid)}
 
-    assert (json.loads(response.to_json()) == d)
+        response = ResponseObject.from_json(json.dumps(d))
+
+        self.assertEqual(json.loads(response.to_json()),d)
 
 
 if __name__ == '__main__':
 
-    test_response_object()
+    unittest.main()

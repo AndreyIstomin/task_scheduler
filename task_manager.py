@@ -5,8 +5,12 @@ from collections import namedtuple
 from PluginEngine import Log
 from PluginEngine.asserts import require
 from LandscapeEditor.backend.config import SERVICE_CONFIG
-from backend.task_scheduler_service import ResponseObject, ResponseStatus, ScenarioProvider, RPCManager, TaskLogger,\
-    RPCStatus, Task, TaskData, RPCErrorCallbackInterface, RPCData, CloseRequest
+from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
+from backend.task_scheduler_service.task_manager_common import Task, TaskData, CloseRequest
+from backend.task_scheduler_service.rpc_common import RPCStatus, RPCData, RPCErrorCallbackInterface
+from backend.task_scheduler_service.scenario_provider import ScenarioProvider
+from backend.task_scheduler_service.rpc_manager import RPCManager
+from backend.task_scheduler_service.task_logger import TaskLogger
 from backend.task_scheduler_service.common import TaskManagerInterface, EditLockManagerInterface
 
 

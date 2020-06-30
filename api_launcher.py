@@ -10,8 +10,8 @@ from PyQt5.QtCore import QSettings
 from PluginEngine import quadtree
 from LandscapeEditor.backend.schemas import LON_LAT_RECT_PROPERTY, CELL_LIST_ARGS_PROPERTY
 from LandscapeEditor.backend.config import SERVICE_CONFIG
-from backend.task_scheduler_service import ScenarioProvider
-
+from backend.task_scheduler_service.scenario_provider import ScenarioProvider
+from backend.task_scheduler_service.consumers import *
 
 def log_help():
 

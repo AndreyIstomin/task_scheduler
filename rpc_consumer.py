@@ -1,12 +1,12 @@
 import json
 import pika
-import sys,traceback
-from abc import ABC, abstractmethod
+import sys, traceback
+from abc import abstractmethod
 from typing import *
 from PluginEngine import Log, ProgressInterface
 from PluginEngine.asserts import require
 from LandscapeEditor.backend import RPCConsumerInterface, Generator, CloseRequestException, TaskInputInterface
-from backend.task_scheduler_service import ResponseObject, ResponseStatus
+from backend.task_scheduler_service.common import ResponseObject, ResponseStatus
 from backend.task_scheduler_service.task_manager_common import TaskInput
 from backend.task_scheduler_service.rpc_common import RPCBase, CMDHandler
 from backend.generator_service import create_client_notifier, create_db_handler

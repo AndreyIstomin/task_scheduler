@@ -4,9 +4,9 @@ from jsonschema import validate, ValidationError
 from PluginEngine.asserts import require
 from PluginEngine.quadtree import make_cell_by_raw_index
 from LandscapeEditor.common import LANDSCAPE_OBJECT_TYPE
-from LandscapeEditor.backend.schemas import DEFAULT_SCHEMA, RECT_SCHEMA
+from LandscapeEditor.backend.schemas import RECT_SCHEMA
 from LandscapeEditor.road.common import IL_SUBTYPE
-from backend.task_scheduler_service.common import TaskInterface, EditLockManagerInterface
+from backend.task_scheduler_service.common import TaskInterface
 
 
 __all__ = ["ScenarioProviderBase", "CellLocker", "ObjectLocker", "ExecutableNode", "Scenario", "GroupExecution",
@@ -144,11 +144,11 @@ class ExecutableNode:
     def _properties_str(self):
         return ''
 
-    def _name(self):
+    def _node_type_name(self):
         return self.__class__.__name__.lower()
 
     def __str__(self):
-        name = self._name()
+        name = self._node_type_name()
         node_list = ',\n'.join(str(node) for node in self._children)
         if node_list:
             return f'<{name} {self._properties_str()}>\n{node_list}\n</{name}>'
@@ -166,10 +166,13 @@ class Scenario(ExecutableNode):
         self._input_type = None
 
     def _properties_str(self) -> str:
-        return f'name="{self.name}", input={self.input_type}'
+        return f'name="{self.name()}", input={self.input_type()}'
 
     def name(self) -> str:
         return self._name
+
+    def set_input_type(self, _type: int):
+        self._input_type = _type
 
     def input_type(self) -> Union[int, None]:
         return self._input_type

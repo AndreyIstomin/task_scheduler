@@ -1,15 +1,13 @@
-import time
 import uuid
 import asyncio
-import json
 from typing import *
-from jsonschema import validate, ValidationError
 from PluginEngine.asserts import require
 from PluginEngine.quadtree import QCell, make_cell_by_raw_index
 from LandscapeEditor.backend import TaskInputInterface
-from backend.task_scheduler_service import ScenarioProvider, RPCRegistry, RPCStatus, RPCData
 from backend.task_scheduler_service.common import TaskManagerInterface, TaskInterface, LockedData, \
-    EditLockManagerInterface, ObjectMap
+    EditLockManagerInterface
+from backend.task_scheduler_service.rpc_common import RPCRegistry, RPCStatus, RPCData
+from backend.task_scheduler_service.scenario_provider import ScenarioProvider
 from backend.task_scheduler_service.rpc_common import shorten_uuid
 
 
@@ -59,20 +57,12 @@ class TaskInput(TaskInputInterface):
         return result
 
     def cells_by_subtype(self, obj_type: int, obj_subtype: int) -> List[QCell]:
-        # d = self._locked_cells.get(obj_type, {})
-        # cell_indices = d.get(obj_subtype, [])
-        # return list(map(make_cell_by_raw_index, cell_indices))
         for type_, subtype_, cells in self._locked_cells:
             if (type_, subtype_) == (obj_type, obj_subtype):
                 return list(map(make_cell_by_raw_index, cells))
         return []
 
     def objects_by_type(self, obj_type: int) -> List[int]:
-        # d = self._locked_objects.get(obj_type, {})
-        # result = []
-        # for indices in d.values():
-        #     result.extend(indices)
-        # return result
         result = []
         for type_, subtype_, indices in self._locked_objects:
             if type_ == obj_type:
@@ -81,8 +71,6 @@ class TaskInput(TaskInputInterface):
         return result
 
     def objects_by_subtype(self, obj_type: int, obj_subtype: int) -> List[int]:
-        # d = self._locked_objects.get(obj_type, {})
-        # return list(d.get(obj_subtype, []))
         for type_, subtype_, indices in self._locked_objects:
             if (type_, subtype_) == (obj_type, obj_subtype):
                 return list(indices)

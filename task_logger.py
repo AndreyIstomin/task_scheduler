@@ -11,8 +11,10 @@ from time import time
 from collections import deque
 from PluginEngine import Log, LogLevel
 from LandscapeEditor.backend.config import SERVICE_CONFIG
-from backend.task_scheduler_service import TaskData, RPCData, CloseRequest, shorten_uuid
-
+from backend.task_scheduler_service.common import shorten_uuid
+from backend.task_scheduler_service.task_manager_common import TaskData
+from backend.task_scheduler_service.rpc_common import RPCData
+from backend.task_scheduler_service.task_manager_common import CloseRequest
 
 db = SqliteDatabase(SERVICE_CONFIG['task_scheduler_service']['log_db'])
 
@@ -243,7 +245,6 @@ class TaskLogger:
 
         for row in Event.select().where(Event.id < less_than).order_by(Event.id.desc()).limit(num_rows):
             await ws.send_str(EventDescriptor.from_row(row).to_str())
-
 
     def _log_event_stat(self, save_time: float, log_level=LogLevel.TRACE):
 
